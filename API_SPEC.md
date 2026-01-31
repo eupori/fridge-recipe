@@ -27,6 +27,8 @@ Base: `/api/v1`
       "time_min": 12,
       "servings": 1,
       "summary": "프라이팬 하나로 끝나는 초간단 단백질 한 끼",
+      "image_url": "https://...",
+      "ingredients_total": ["김치", "두부", "양파", "계란"],
       "ingredients_have": ["김치", "두부", "양파", "계란"],
       "ingredients_need": ["식용유"],
       "steps": [

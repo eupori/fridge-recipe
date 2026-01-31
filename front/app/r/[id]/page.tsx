@@ -32,10 +32,23 @@ export default function ResultPage({ params }: { params: { id: string } }) {
           <article key={idx} style={{ border: "1px solid #eee", borderRadius: 12, padding: 14 }}>
             <h2 style={{ fontSize: 18, fontWeight: 800 }}>{r.title}</h2>
             <div style={{ color: "#666", marginTop: 4 }}>{r.time_min}분 · {r.servings}인분</div>
+
+            {r.image_url ? (
+              <img
+                src={r.image_url}
+                alt={r.title}
+                style={{ marginTop: 10, width: "100%", height: 220, objectFit: "cover", borderRadius: 10, background: "#f3f3f3" }}
+              />
+            ) : null}
+
             <p style={{ marginTop: 10 }}>{r.summary}</p>
 
             <div style={{ marginTop: 10 }}>
-              <div style={{ fontWeight: 700 }}>보유 재료</div>
+              <div style={{ fontWeight: 700 }}>총 재료</div>
+              <div style={{ color: "#444" }}>{(r.ingredients_total || []).join(", ") || "-"}</div>
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontWeight: 700 }}>보유 재료(입력 기준)</div>
               <div style={{ color: "#444" }}>{(r.ingredients_have || []).join(", ") || "-"}</div>
             </div>
             <div style={{ marginTop: 10 }}>
