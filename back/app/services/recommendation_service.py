@@ -1,128 +1,151 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from app.core.config import settings
 from app.models.recommendation import (
     RecommendationCreate,
     RecommendationResponse,
     Recipe,
     ShoppingItem,
 )
+from app.services.llm_adapter import RecipeLLMAdapter, MockRecipeLLMAdapter
+from app.services.image_search_service import ImageSearchService
 from app.services.validation import validate_response
+
+logger = logging.getLogger(__name__)
 
 # NOTE: MVP용 인메모리 저장소(배포/재시작 시 사라짐)
 _STORE: dict[str, RecommendationResponse] = {}
 
 
-def create_recommendation(payload: RecommendationCreate) -> RecommendationResponse:
-    # TODO: LLM 연동 전까지는 더미 응답
-    # 입력 재료 정규화(공백 제거 + 중복 제거)
-    ing_set = {i.strip() for i in payload.ingredients if i and i.strip()}
+def split_have_need(
+    user_ingredients: list[str],
+    recipe_ingredients: list[str]
+) -> tuple[list[str], list[str]]:
+    """
+    사용자 재료와 레시피 재료를 비교하여 보유/필요 재료 분리
 
-    # MVP 더미 레시피라도 "총재료/보유/추가"가 일관되게 나오도록 레시피별 필수 재료를 선언
-    # NOTE: 기본 양념(소금/후추/식용유 등)은 '자동 가정'하지 않음(요구사항: 빼는 걸로).
-    def img(q: str) -> str:
-        # 키 없이도 동작하는 간단한 이미지 소스(Unsplash). v2에서 정식 API/저작권 표기 고도화.
-        # NOTE: 한국어 쿼리는 결과가 약할 수 있어 영어 키워드도 함께 사용 권장.
-        from urllib.parse import quote
+    Args:
+        user_ingredients: 사용자가 보유한 재료 목록
+        recipe_ingredients: 레시피에 필요한 재료 목록
 
-        return f"https://source.unsplash.com/featured/?{quote(q)}"
+    Returns:
+        (보유 재료, 필요 재료) 튜플
+    """
+    # 정규화: 공백 제거 + 소문자 변환
+    user_set = {i.strip().lower() for i in user_ingredients if i and i.strip()}
+    recipe_set = {i.strip().lower() for i in recipe_ingredients if i and i.strip()}
 
-    def split_have_need(required: set[str]) -> tuple[list[str], list[str]]:
-        have = sorted(list(required & ing_set))
-        need = sorted(list(required - ing_set))
-        return have, need
+    # 원본 대소문자 유지를 위해 매핑 생성
+    user_map = {i.strip().lower(): i.strip() for i in user_ingredients if i and i.strip()}
+    recipe_map = {i.strip().lower(): i.strip() for i in recipe_ingredients if i and i.strip()}
 
-    def total(required: set[str]) -> list[str]:
-        return sorted(list(required))
+    # 보유 재료: 사용자가 가진 것 중 레시피에 필요한 것
+    have_keys = user_set & recipe_set
+    have = sorted([recipe_map[k] for k in have_keys])
 
-    recipes: list[Recipe] = []
+    # 필요 재료: 레시피에 필요한 것 중 사용자가 없는 것
+    need_keys = recipe_set - user_set
+    need = sorted([recipe_map[k] for k in need_keys])
 
-    # 1) 김치계란볶음밥
-    req1 = {"김치", "계란", "밥"}
-    have1, need1 = split_have_need(req1)
-    recipes.append(
-        Recipe(
-            title="김치계란볶음밥(초간단)",
-            time_min=12,
-            servings=payload.constraints.servings,
-            summary="남은 김치/밥으로 1팬에 끝내는 자취 필살기",
-            image_url=img("kimchi fried rice"),
-            ingredients_total=total(req1),
-            ingredients_have=have1,
-            ingredients_need=need1,
-            steps=[
-                "프라이팬에 기름을 두르고 김치를 2분 볶아요.",
-                "밥을 넣고 3분 볶아 고슬고슬하게 만들어요.",
-                "한쪽에 공간을 내고 계란을 풀어 스크램블해요.",
-                "모두 섞고 간장/소금으로 간을 맞춰요(있으면)."
-            ],
-            tips=["밥이 없으면 식빵/또띠아로도 변형 가능해요."],
+    return have, need
+
+
+async def create_recommendation(payload: RecommendationCreate) -> RecommendationResponse:
+    """
+    사용자 재료로 레시피 추천 생성 (LLM 통합 + 이미지 검색)
+
+    Args:
+        payload: 사용자 입력 (재료, 제약사항)
+
+    Returns:
+        RecommendationResponse: 3개 레시피 + 장보기 리스트
+
+    Raises:
+        ValueError: 검증 실패 시
+    """
+    logger.info(f"레시피 생성 요청: 재료={payload.ingredients}, 제약={payload.constraints}")
+
+    # 1. LLM 어댑터 선택 (mock 또는 실제)
+    if settings.llm_provider == "mock":
+        llm_adapter = MockRecipeLLMAdapter()
+    else:
+        llm_adapter = RecipeLLMAdapter()
+
+    # 2. LLM으로 레시피 생성 (ingredients_total만 포함)
+    recipes_raw = llm_adapter.generate_recipes(payload)
+
+    # 3. 이미지 검색 서비스 초기화
+    image_service = ImageSearchService()
+
+    # 4. 이미지 병렬 검색 (3개 레시피 동시 처리)
+    logger.info(f"이미지 검색 시작: {len(recipes_raw)}개 레시피")
+    image_tasks = [
+        image_service.get_image(recipe.title)
+        for recipe in recipes_raw
+    ]
+    image_results = await asyncio.gather(*image_tasks, return_exceptions=True)
+
+    # 5. ingredients_have, ingredients_need 분리 + 이미지 URL 추가
+    final_recipes = []
+    for recipe, img_result in zip(recipes_raw, image_results):
+        have, need = split_have_need(
+            payload.ingredients,
+            recipe.ingredients_total
         )
-    )
 
-    # 2) 두부간장조림
-    req2 = {"두부", "간장"}
-    have2, need2 = split_have_need(req2)
-    recipes.append(
-        Recipe(
-            title="두부간장조림(전자레인지 버전)",
-            time_min=10,
-            servings=payload.constraints.servings,
-            summary="썰어서 양념 뿌리고 돌리면 끝",
-            image_url=img("tofu"),
-            ingredients_total=total(req2),
-            ingredients_have=have2,
-            ingredients_need=need2,
-            steps=[
-                "두부를 1~2cm로 썰어요.",
-                "간장+물+설탕(또는 올리고당)을 섞어 양념을 만들어요(있으면).",
-                "두부 위에 양념과 파(있으면)를 올려요.",
-                "전자레인지에 2~3분 돌려 마무리해요."
-            ],
-            tips=["매콤하게 먹고 싶으면 고춧가루를 조금 넣어요(있으면)."],
+        # 이미지 검색 실패 처리
+        if isinstance(img_result, Exception):
+            logger.error(f"이미지 검색 실패 ({recipe.title}): {img_result}")
+            img_url = None
+        else:
+            img_url = img_result
+
+        # Recipe 객체 재생성 (have/need 필드 + 이미지 URL 업데이트)
+        final_recipe = Recipe(
+            title=recipe.title,
+            time_min=recipe.time_min,
+            servings=recipe.servings,
+            summary=recipe.summary,
+            image_url=img_url,  # Google/Unsplash/Mock 이미지
+            ingredients_total=recipe.ingredients_total,
+            ingredients_have=have,
+            ingredients_need=need,
+            steps=recipe.steps,
+            tips=recipe.tips or [],
+            warnings=recipe.warnings or []
         )
-    )
+        final_recipes.append(final_recipe)
 
-    # 3) 양파달걀국
-    req3 = {"양파", "계란", "소금"}
-    have3, need3 = split_have_need(req3)
-    recipes.append(
-        Recipe(
-            title="양파달걀국(초간단)",
-            time_min=8,
-            servings=payload.constraints.servings,
-            summary="속 편한 국물 한 그릇",
-            image_url=img("egg soup"),
-            ingredients_total=total(req3),
-            ingredients_have=have3,
-            ingredients_need=need3,
-            steps=[
-                "물에 양파를 넣고 3분 끓여요.",
-                "간을 소금(또는 국간장)으로 맞춰요.",
-                "계란을 풀어 넣고 젓지 말고 30초 두어요.",
-                "한 번만 가볍게 저어 마무리해요."
-            ],
-            tips=["다진마늘을 넣어도 좋아요(있으면)."],
-        )
-    )
+    logger.info(f"이미지 검색 완료: {sum(1 for r in final_recipes if r.image_url)}개 성공")
 
-    # 장보기 리스트는 recipes[].ingredients_need를 합쳐서 생성
-    need_items: set[str] = set()
-    for r in recipes:
-        need_items |= {x for x in r.ingredients_need if x}
+    # 4. 장보기 리스트 생성 (모든 레시피의 필요 재료 중복 제거)
+    all_need: set[str] = set()
+    for r in final_recipes:
+        all_need |= {x for x in r.ingredients_need if x}
 
-    rec = RecommendationResponse(
-        id=f"rec_{uuid4().hex[:10]}",
+    shopping_list = [ShoppingItem(item=i) for i in sorted(list(all_need))]
+
+    # 5. 응답 객체 생성
+    rec_id = f"rec_{uuid4().hex[:10]}"
+    response = RecommendationResponse(
+        id=rec_id,
         created_at=datetime.now(timezone.utc),
-        recipes=recipes,
-        shopping_list=[ShoppingItem(item=i) for i in sorted(list(need_items))],
+        recipes=final_recipes,
+        shopping_list=shopping_list
     )
 
-    validate_response(rec, payload)
-    _STORE[rec.id] = rec
-    return rec
+    # 6. 검증 (LLM 출력이 규칙 만족하는지 확인)
+    validate_response(response, payload)
+
+    # 7. 메모리 저장 및 반환
+    _STORE[rec_id] = response
+    logger.info(f"레시피 생성 완료: ID={rec_id}")
+    return response
 
 
 def get_recommendation(recommendation_id: str) -> RecommendationResponse | None:

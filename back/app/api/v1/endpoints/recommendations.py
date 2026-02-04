@@ -9,16 +9,94 @@ from app.services.recommendation_service import create_recommendation, get_recom
 router = APIRouter()
 
 
-@router.post("", response_model=RecommendationResponse)
-def post_recommendations(payload: RecommendationCreate):
+@router.post(
+    "",
+    response_model=RecommendationResponse,
+    summary="레시피 추천 생성",
+    description="냉장고 재료와 제약조건을 기반으로 새로운 레시피 추천을 생성합니다.",
+    responses={
+        200: {
+            "description": "레시피 추천이 성공적으로 생성됨",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": "rec_abc1234567",
+                        "created_at": "2026-01-31T12:00:00",
+                        "recipes": [
+                            {
+                                "title": "김치볶음밥",
+                                "time_min": 10,
+                                "servings": 1,
+                                "summary": "간단하고 맛있는 김치볶음밥",
+                                "image_url": None,
+                                "ingredients_total": ["밥", "김치", "참기름"],
+                                "ingredients_have": ["밥", "김치"],
+                                "ingredients_need": ["참기름"],
+                                "steps": ["김치를 잘게 썬다", "팬에 기름을 두르고 김치를 볶는다"],
+                                "tips": [],
+                                "warnings": []
+                            }
+                        ],
+                        "shopping_list": [
+                            {"item": "참기름", "qty": None, "unit": None, "category": None}
+                        ]
+                    }
+                }
+            }
+        },
+        400: {"description": "잘못된 요청 (검증 실패)"},
+    }
+)
+async def post_recommendations(payload: RecommendationCreate):
+    """
+    ## 레시피 추천 생성
+
+    냉장고에 있는 재료와 조리 제약조건을 입력하면 3개의 레시피와 통합 장보기 리스트를 반환합니다.
+
+    ### 요청 예시
+    - **ingredients**: 냉장고에 있는 재료 목록 (최소 1개 이상)
+    - **constraints**: 조리 제약조건
+      - time_limit_min: 최대 조리 시간 (5-60분, 기본값: 15분)
+      - servings: 인분 (1-6인분, 기본값: 1인분)
+      - tools: 사용 가능한 조리 도구
+      - exclude: 제외할 재료
+
+    ### 응답
+    - 정확히 3개의 레시피
+    - 각 레시피는 보유 재료와 구매 필요 재료로 분리됨
+    - 통합된 장보기 리스트 (중복 제거됨)
+    """
     try:
-        return create_recommendation(payload)
+        return await create_recommendation(payload)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{recommendation_id}", response_model=RecommendationResponse)
+@router.get(
+    "/{recommendation_id}",
+    response_model=RecommendationResponse,
+    summary="레시피 추천 조회",
+    description="저장된 레시피 추천을 ID로 조회합니다.",
+    responses={
+        200: {"description": "레시피 추천 조회 성공"},
+        404: {"description": "해당 ID의 추천을 찾을 수 없음"},
+    }
+)
 def get_recommendations(recommendation_id: str):
+    """
+    ## 레시피 추천 조회
+
+    이전에 생성된 레시피 추천을 ID로 조회합니다.
+
+    ### Path Parameters
+    - **recommendation_id**: 추천 ID (예: rec_abc1234567)
+
+    ### 응답
+    - 생성 시점의 전체 추천 데이터 (레시피 3개 + 장보기 리스트)
+
+    ### 주의사항
+    - 현재 인메모리 저장소를 사용하므로 서버 재시작 시 데이터가 손실될 수 있습니다.
+    """
     rec = get_recommendation(recommendation_id)
     if rec is None:
         raise HTTPException(status_code=404, detail="not_found")
