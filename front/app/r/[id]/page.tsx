@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Clock, Users, ChefHat, ShoppingCart, Lightbulb, ChevronDown, ChevronUp } from "lucide-react";
+import { FavoriteButton } from "@/components/FavoriteButton";
 
 export default function ResultPage({ params }: { params: { id: string } }) {
   const [data, setData] = useState<any>(null);
@@ -83,12 +84,20 @@ export default function ResultPage({ params }: { params: { id: string } }) {
                 {/* 우측: 핵심 정보 */}
                 <div className="flex-1 p-4 flex flex-col justify-between">
                   <div>
-                    {/* 제목 + 번호 */}
+                    {/* 제목 + 번호 + 즐겨찾기 */}
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <h3 className="font-bold text-lg leading-tight">{r.title}</h3>
-                      <Badge variant="secondary" className="shrink-0">
-                        {idx + 1}
-                      </Badge>
+                      <div className="flex items-center gap-1">
+                        <FavoriteButton
+                          recommendationId={data.id}
+                          recipeIndex={idx}
+                          recipeTitle={r.title}
+                          recipeImageUrl={r.image_url}
+                        />
+                        <Badge variant="secondary" className="shrink-0">
+                          {idx + 1}
+                        </Badge>
+                      </div>
                     </div>
 
                     {/* 시간, 인분 */}

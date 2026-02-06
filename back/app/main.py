@@ -1,13 +1,24 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.database import create_tables
 from app.api.v1.router import api_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """앱 시작 시 DB 테이블 생성"""
+    create_tables()
+    yield
 
 
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Fridge-Recipe API",
+        lifespan=lifespan,
         description="""
         ## 냉장고 재료 기반 레시피 추천 API
 

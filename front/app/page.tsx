@@ -1,14 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { createRecommendation } from "../lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChefHat, Clock, Users, Utensils } from "lucide-react";
+import { ChefHat, Clock, Users, Utensils, Heart, LogOut, User } from "lucide-react";
 
 export default function HomePage() {
   const [ingredientsText, setIngredientsText] = useState("계란, 김치, 양파");
@@ -18,6 +20,7 @@ export default function HomePage() {
   const [tools, setTools] = useState<string[]>(["프라이팬"]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { user, logout } = useAuth();
 
   const ingredients = useMemo(() => {
     return ingredientsText
@@ -59,6 +62,36 @@ export default function HomePage() {
 
   return (
     <main className="container max-w-3xl mx-auto py-10 px-4">
+      {/* Header with Auth */}
+      <div className="flex justify-end gap-2 mb-6">
+        {user ? (
+          <>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/favorites">
+                <Heart className="w-4 h-4 mr-1" />
+                즐겨찾기
+              </Link>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={logout}>
+              <LogOut className="w-4 h-4 mr-1" />
+              로그아웃
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/login">
+                <User className="w-4 h-4 mr-1" />
+                로그인
+              </Link>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/signup">회원가입</Link>
+            </Button>
+          </>
+        )}
+      </div>
+
       <div className="text-center mb-8">
         <div className="flex items-center justify-center gap-2 mb-4">
           <ChefHat className="w-10 h-10" />
@@ -170,7 +203,7 @@ export default function HomePage() {
           </Button>
 
           <p className="text-xs text-center text-muted-foreground">
-            MVP: 지금은 백엔드가 더미 응답을 반환하도록 되어 있어요. LLM 연동은 다음 단계에서 붙입니다.
+            AI가 재료에 맞는 레시피를 생성합니다. 로그인하면 즐겨찾기를 저장할 수 있어요.
           </p>
         </CardContent>
       </Card>

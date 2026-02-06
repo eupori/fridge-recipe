@@ -8,8 +8,13 @@ class Settings(BaseSettings):
     app_name: str = "fridge-recipes"
     cors_origins: str = "http://localhost:3000"
 
-    # Optional
+    # Database (PostgreSQL via Supabase)
     database_url: str | None = None
+
+    # JWT Authentication
+    jwt_secret_key: str = "change-this-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_expiration_minutes: int = 1440  # 24 hours
 
     # LLM
     llm_provider: str = "anthropic"
