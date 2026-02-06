@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: "오늘의 냉장고 레시피 3개",
@@ -8,7 +9,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body style={{ fontFamily: "system-ui, -apple-system, Segoe UI, Roboto" }}>{children}</body>
+      <body className="font-sans antialiased">{children}</body>
     </html>
   );
 }

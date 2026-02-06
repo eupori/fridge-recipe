@@ -1,21 +1,29 @@
 """
-이미지 검색 서비스 - Google Custom Search API 통합
+이미지 검색/생성 서비스 - Google Custom Search API 및 Gemini Imagen 통합
 
 현재 Unsplash API의 한국 음식 이미지 검색 정확도(30-50%)를 개선하기 위해
 Google Custom Search API를 사용합니다. 정확도를 80-90%까지 향상시킵니다.
 
+또한 Gemini의 이미지 생성 기능(Imagen)을 사용하여 고품질 한국 음식 이미지를
+AI로 직접 생성할 수 있습니다.
+
 주요 기능:
 - Google Custom Search API 통합
+- Gemini Imagen 이미지 생성 통합
 - 한국어 음식명 → 영어 번역 자동 매핑
-- 다단계 폴백 체인 (Google → Unsplash → None)
+- 다단계 폴백 체인 (Google/Gemini → Unsplash → None)
 - 인메모리 캐싱으로 API 할당량 절약
-- 비동기 처리로 3개 이미지 병렬 검색
+- 비동기 처리로 3개 이미지 병렬 검색/생성
 """
 
 from __future__ import annotations
 
+import asyncio
+import base64
+import json
 import logging
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Dict, Optional
 from urllib.parse import quote
 
@@ -285,6 +293,161 @@ class MockImageSearchAdapter(ImageSearchAdapter):
         return url
 
 
+class GeminiImageGenerationAdapter(ImageSearchAdapter):
+    """
+    Gemini AI 이미지 생성 어댑터
+
+    Google Gemini의 이미지 생성 기능을 사용하여 고품질 한국 음식 이미지를 AI로 생성합니다.
+    검색 기반 방식과 달리 항상 일관된 스타일의 음식 사진을 생성할 수 있습니다.
+
+    주의: Google Cloud 유료 계정(Billing 활성화) 필요
+    - Imagen 모델: 유료 사용자만 접근 가능
+    - Gemini 이미지 생성: 무료 플랜 할당량 매우 제한적
+
+    비용: 약 $0.02-0.04/이미지
+    """
+
+    def __init__(self):
+        self.api_key = settings.gemini_api_key
+        self.model = settings.gemini_image_model
+        self.timeout = settings.image_search_timeout
+        self._client = None
+
+        if not self.api_key:
+            logger.warning("Gemini API 키 미설정. Mock 모드로 전환됩니다.")
+
+    def _get_client(self):
+        """Lazy 초기화된 Gemini 클라이언트 반환"""
+        if self._client is None:
+            try:
+                from google import genai
+                self._client = genai.Client(api_key=self.api_key)
+            except ImportError:
+                logger.error("google-genai 패키지가 설치되지 않았습니다. pip install google-genai")
+                raise
+        return self._client
+
+    def _build_prompt(self, recipe_title: str) -> str:
+        """
+        한국 음식 이미지 생성 프롬프트 구성
+
+        한국어 → 영어 번역을 활용하여 정확한 음식 이미지 생성
+
+        Args:
+            recipe_title: 레시피 제목 (한국어)
+
+        Returns:
+            영문 이미지 생성 프롬프트
+        """
+        # 한국어 → 영어 번역 조회
+        english_name = KOREAN_FOOD_TRANSLATIONS.get(recipe_title, None)
+
+        # 부분 일치 검색
+        if english_name is None:
+            for korean_term, english_translation in KOREAN_FOOD_TRANSLATIONS.items():
+                if korean_term in recipe_title:
+                    english_name = english_translation
+                    break
+
+        # 번역이 없으면 기본 템플릿 사용
+        if english_name is None:
+            english_name = f"{recipe_title} Korean dish"
+
+        prompt = f"""Professional food photography of {recipe_title} ({english_name}).
+Korean cuisine, appetizing presentation, warm natural lighting,
+top-down view on a beautiful ceramic plate, restaurant quality,
+high resolution, photorealistic, shallow depth of field,
+garnished with fresh herbs, steam rising from the dish."""
+
+        return prompt
+
+    async def search_image(self, query: str) -> str | None:
+        """
+        이미지 생성 후 base64 data URL 반환
+
+        Args:
+            query: 레시피 제목 (검색이 아닌 생성용으로 사용)
+
+        Returns:
+            base64 인코딩된 이미지 data URL 또는 None
+        """
+        if not self.api_key:
+            logger.warning("Gemini API 키 없음, 이미지 생성 불가")
+            return None
+
+        try:
+            from google import genai
+            from google.genai import types
+
+            client = self._get_client()
+            prompt = self._build_prompt(query)
+
+            logger.info(f"Gemini 이미지 생성 시작: '{query}' (모델: {self.model})")
+
+            # 동기 API를 비동기 실행 (Gemini SDK는 현재 동기만 지원)
+            loop = asyncio.get_event_loop()
+
+            # 모델 유형에 따라 다른 API 사용
+            if self.model.startswith("imagen"):
+                # Imagen 모델: generate_images 사용 (유료 계정 필요)
+                response = await loop.run_in_executor(
+                    None,
+                    lambda: client.models.generate_images(
+                        model=self.model,
+                        prompt=prompt,
+                        config=types.GenerateImagesConfig(
+                            number_of_images=1,
+                        )
+                    )
+                )
+
+                if response.generated_images and len(response.generated_images) > 0:
+                    image = response.generated_images[0].image
+                    image_bytes = image.image_bytes
+                    b64_data = base64.b64encode(image_bytes).decode("utf-8")
+                    data_url = f"data:image/png;base64,{b64_data}"
+                    logger.info(f"Imagen 이미지 생성 성공: '{query}' (크기: {len(image_bytes)} bytes)")
+                    return data_url
+            else:
+                # Gemini 이미지 생성 모델: generate_content 사용
+                response = await loop.run_in_executor(
+                    None,
+                    lambda: client.models.generate_content(
+                        model=self.model,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_modalities=["TEXT", "IMAGE"]
+                        )
+                    )
+                )
+
+                if response.candidates and response.candidates[0].content.parts:
+                    for part in response.candidates[0].content.parts:
+                        if part.inline_data and part.inline_data.mime_type.startswith("image/"):
+                            image_data = part.inline_data.data
+                            mime_type = part.inline_data.mime_type
+                            b64_data = base64.b64encode(image_data).decode("utf-8")
+                            data_url = f"data:{mime_type};base64,{b64_data}"
+                            logger.info(f"Gemini 이미지 생성 성공: '{query}' (크기: {len(image_data)} bytes)")
+                            return data_url
+
+            logger.warning(f"Gemini 응답에 이미지 없음: '{query}'")
+            return None
+
+        except ImportError:
+            logger.error("google-genai 패키지 미설치")
+            return None
+        except Exception as e:
+            error_str = str(e)
+            if "billed users" in error_str.lower():
+                logger.error(f"Gemini 이미지 생성: 유료 계정 필요 (Billing 활성화 필요)")
+            elif "quota" in error_str.lower() or "RESOURCE_EXHAUSTED" in error_str:
+                logger.error(f"Gemini 이미지 생성: 할당량 초과 (유료 플랜 업그레이드 또는 대기 필요)")
+            else:
+                logger.error(f"Gemini 이미지 생성 실패: {e}")
+            return None
+
+
 class ImageSearchService:
     """
     통합 이미지 검색 서비스
@@ -292,8 +455,11 @@ class ImageSearchService:
     기능:
     - Primary provider (Google/Unsplash/Mock) 사용
     - Fallback provider (Unsplash) 자동 전환
-    - 인메모리 캐싱으로 반복 검색 방지
+    - 파일 기반 영구 캐싱으로 서버 재시작 후에도 캐시 유지
     """
+
+    # 캐시 파일 경로 (back/data/image_cache.json)
+    CACHE_FILE = Path(__file__).parent.parent.parent / "data" / "image_cache.json"
 
     def __init__(self):
         # Primary provider 선택
@@ -301,6 +467,8 @@ class ImageSearchService:
 
         if provider == "google":
             self.primary = GoogleImageSearchAdapter()
+        elif provider == "gemini":
+            self.primary = GeminiImageGenerationAdapter()
         elif provider == "unsplash":
             self.primary = UnsplashImageSearchAdapter()
         elif provider == "mock":
@@ -309,17 +477,47 @@ class ImageSearchService:
             logger.warning(f"알 수 없는 provider '{provider}', Unsplash 사용")
             self.primary = UnsplashImageSearchAdapter()
 
-        # Fallback은 항상 Unsplash (Mock 제외)
-        if provider != "mock":
+        # Fallback은 항상 Unsplash (Mock/Gemini 제외)
+        # Gemini는 생성 기반이라 Unsplash 폴백이 부자연스러움
+        if provider not in ("mock", "gemini"):
             self.fallback = UnsplashImageSearchAdapter()
         else:
             self.fallback = None
 
-        # 인메모리 캐시
+        # 파일 기반 영구 캐시 로드
         self.cache_enabled = settings.image_cache_enabled
-        self.cache: Dict[str, Optional[str]] = {}
+        self.cache: Dict[str, Optional[str]] = self._load_cache()
 
-        logger.info(f"이미지 검색 서비스 초기화: provider={provider}, cache={self.cache_enabled}")
+        logger.info(f"이미지 검색 서비스 초기화: provider={provider}, cache={self.cache_enabled}, 캐시 항목={len(self.cache)}")
+
+    def _load_cache(self) -> Dict[str, Optional[str]]:
+        """파일에서 캐시 로드"""
+        if not self.cache_enabled:
+            return {}
+
+        try:
+            if self.CACHE_FILE.exists():
+                with open(self.CACHE_FILE, "r", encoding="utf-8") as f:
+                    cache_data = json.load(f)
+                    logger.info(f"캐시 파일 로드 완료: {len(cache_data)}개 항목")
+                    return cache_data
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"캐시 파일 로드 실패, 새로 시작: {e}")
+
+        return {}
+
+    def _save_cache(self):
+        """캐시를 파일에 저장"""
+        if not self.cache_enabled:
+            return
+
+        try:
+            self.CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump(self.cache, f, ensure_ascii=False, indent=2)
+            logger.debug(f"캐시 파일 저장 완료: {len(self.cache)}개 항목")
+        except IOError as e:
+            logger.error(f"캐시 파일 저장 실패: {e}")
 
     async def get_image(self, recipe_title: str) -> str | None:
         """
@@ -348,9 +546,10 @@ class ImageSearchService:
             image_url = await self.primary.search_image(recipe_title)
 
             if image_url:
-                # 캐시 저장
+                # 캐시 저장 (메모리 + 파일)
                 if self.cache_enabled:
                     self.cache[recipe_title] = image_url
+                    self._save_cache()
                 return image_url
         except Exception as e:
             logger.error(f"Primary provider 에러: {e}")
@@ -362,9 +561,10 @@ class ImageSearchService:
                 image_url = await self.fallback.search_image(recipe_title)
 
                 if image_url:
-                    # 캐시 저장
+                    # 캐시 저장 (메모리 + 파일)
                     if self.cache_enabled:
                         self.cache[recipe_title] = image_url
+                        self._save_cache()
                     return image_url
             except Exception as e:
                 logger.error(f"Fallback provider 에러: {e}")
@@ -372,15 +572,22 @@ class ImageSearchService:
         # 4. 모두 실패
         logger.warning(f"이미지 검색 실패 (모든 provider): '{recipe_title}'")
 
-        # None도 캐싱 (반복 검색 방지)
+        # None도 캐싱 (반복 검색 방지) - 메모리 + 파일
         if self.cache_enabled:
             self.cache[recipe_title] = None
+            self._save_cache()
 
         return None
 
     def clear_cache(self):
-        """캐시 초기화"""
+        """캐시 초기화 (메모리 + 파일)"""
         self.cache.clear()
+        if self.CACHE_FILE.exists():
+            try:
+                self.CACHE_FILE.unlink()
+                logger.info("이미지 검색 캐시 파일 삭제")
+            except IOError as e:
+                logger.error(f"캐시 파일 삭제 실패: {e}")
         logger.info("이미지 검색 캐시 초기화")
 
     def get_cache_stats(self) -> dict:

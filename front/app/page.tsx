@@ -2,6 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { createRecommendation } from "../lib/api";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ChefHat, Clock, Users, Utensils } from "lucide-react";
 
 export default function HomePage() {
   const [ingredientsText, setIngredientsText] = useState("계란, 김치, 양파");
@@ -51,99 +58,122 @@ export default function HomePage() {
   }
 
   return (
-    <main style={{ maxWidth: 760, margin: "40px auto", padding: 16 }}>
-      <h1 style={{ fontSize: 28, fontWeight: 700 }}>오늘의 냉장고 레시피 3개</h1>
-      <p style={{ color: "#555" }}>재료를 입력하면 15분 내 가능한 레시피 3개와 장보기 리스트를 만들어줘요.</p>
-
-      <section style={{ marginTop: 24 }}>
-        <label style={{ display: "block", fontWeight: 600 }}>재료</label>
-        <textarea
-          value={ingredientsText}
-          onChange={(e) => setIngredientsText(e.target.value)}
-          rows={5}
-          placeholder="예: 계란, 김치, 양파\n두부"
-          style={{ width: "100%", marginTop: 8, padding: 12, border: "1px solid #ddd", borderRadius: 8 }}
-        />
-        <div style={{ marginTop: 8, color: "#666", fontSize: 13 }}>인식된 재료: {ingredients.join(", ") || "(없음)"}</div>
-      </section>
-
-      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 16 }}>
-        <div>
-          <label style={{ display: "block", fontWeight: 600 }}>시간(분)</label>
-          <select value={timeLimit} onChange={(e) => setTimeLimit(Number(e.target.value))} style={{ width: "100%", marginTop: 8, padding: 10 }}>
-            <option value={10}>10</option>
-            <option value={15}>15</option>
-            <option value={20}>20</option>
-          </select>
+    <main className="container max-w-3xl mx-auto py-10 px-4">
+      <div className="text-center mb-8">
+        <div className="flex items-center justify-center gap-2 mb-4">
+          <ChefHat className="w-10 h-10" />
+          <h1 className="text-4xl font-bold">오늘의 냉장고 레시피</h1>
         </div>
-        <div>
-          <label style={{ display: "block", fontWeight: 600 }}>인분</label>
-          <select value={servings} onChange={(e) => setServings(Number(e.target.value))} style={{ width: "100%", marginTop: 8, padding: 10 }}>
-            <option value={1}>1</option>
-            <option value={2}>2</option>
-          </select>
-        </div>
-      </section>
+        <p className="text-muted-foreground text-lg">
+          재료를 입력하면 15분 내 가능한 레시피 3개와 장보기 리스트를 만들어줘요
+        </p>
+      </div>
 
-      <section style={{ marginTop: 16 }}>
-        <label style={{ display: "block", fontWeight: 600 }}>조리도구</label>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-          {[
-            "프라이팬",
-            "전자레인지",
-            "에어프라이어",
-          ].map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => toggleTool(t)}
-              style={{
-                padding: "8px 10px",
-                borderRadius: 999,
-                border: "1px solid #ddd",
-                background: tools.includes(t) ? "#111" : "#fff",
-                color: tools.includes(t) ? "#fff" : "#111",
-              }}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-      </section>
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle>재료 입력</CardTitle>
+          <CardDescription>냉장고에 있는 재료를 알려주세요</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="ingredients">재료</Label>
+            <Textarea
+              id="ingredients"
+              value={ingredientsText}
+              onChange={(e) => setIngredientsText(e.target.value)}
+              rows={5}
+              placeholder="예: 계란, 김치, 양파&#10;두부"
+            />
+            <p className="text-sm text-muted-foreground">
+              인식된 재료: {ingredients.join(", ") || "(없음)"}
+            </p>
+          </div>
 
-      <section style={{ marginTop: 16 }}>
-        <label style={{ display: "block", fontWeight: 600 }}>제외 재료/알레르기</label>
-        <input
-          value={excludeText}
-          onChange={(e) => setExcludeText(e.target.value)}
-          placeholder="예: 우유, 땅콩"
-          style={{ width: "100%", marginTop: 8, padding: 12, border: "1px solid #ddd", borderRadius: 8 }}
-        />
-      </section>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="time-limit" className="flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                시간 제한
+              </Label>
+              <Select value={timeLimit.toString()} onValueChange={(v) => setTimeLimit(Number(v))}>
+                <SelectTrigger id="time-limit">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10분</SelectItem>
+                  <SelectItem value="15">15분</SelectItem>
+                  <SelectItem value="20">20분</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-      {error && <p style={{ marginTop: 12, color: "#b00020" }}>{error}</p>}
+            <div className="space-y-2">
+              <Label htmlFor="servings" className="flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                인분
+              </Label>
+              <Select value={servings.toString()} onValueChange={(v) => setServings(Number(v))}>
+                <SelectTrigger id="servings">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1인분</SelectItem>
+                  <SelectItem value="2">2인분</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
-      <button
-        onClick={onSubmit}
-        disabled={loading || ingredients.length === 0}
-        style={{
-          marginTop: 20,
-          width: "100%",
-          padding: 14,
-          borderRadius: 10,
-          background: loading ? "#666" : "#111",
-          color: "#fff",
-          fontWeight: 700,
-          border: "none",
-          cursor: "pointer",
-        }}
-      >
-        {loading ? "생성 중…" : "레시피 3개 추천받기"}
-      </button>
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <Utensils className="w-4 h-4" />
+              조리도구
+            </Label>
+            <div className="flex gap-2 flex-wrap">
+              {["프라이팬", "전자레인지", "에어프라이어"].map((t) => (
+                <Button
+                  key={t}
+                  type="button"
+                  onClick={() => toggleTool(t)}
+                  variant={tools.includes(t) ? "default" : "outline"}
+                  size="sm"
+                >
+                  {t}
+                </Button>
+              ))}
+            </div>
+          </div>
 
-      <p style={{ marginTop: 10, fontSize: 12, color: "#666" }}>
-        MVP: 지금은 백엔드가 더미 응답을 반환하도록 되어 있어요. LLM 연동은 다음 단계에서 붙입니다.
-      </p>
+          <div className="space-y-2">
+            <Label htmlFor="exclude">제외 재료 / 알레르기</Label>
+            <Input
+              id="exclude"
+              value={excludeText}
+              onChange={(e) => setExcludeText(e.target.value)}
+              placeholder="예: 우유, 땅콩"
+            />
+          </div>
+
+          {error && (
+            <div className="p-4 bg-destructive/10 text-destructive rounded-md text-sm">
+              {error}
+            </div>
+          )}
+
+          <Button
+            onClick={onSubmit}
+            disabled={loading || ingredients.length === 0}
+            className="w-full h-12 text-base font-semibold"
+            size="lg"
+          >
+            {loading ? "생성 중…" : "레시피 3개 추천받기"}
+          </Button>
+
+          <p className="text-xs text-center text-muted-foreground">
+            MVP: 지금은 백엔드가 더미 응답을 반환하도록 되어 있어요. LLM 연동은 다음 단계에서 붙입니다.
+          </p>
+        </CardContent>
+      </Card>
     </main>
   );
 }
