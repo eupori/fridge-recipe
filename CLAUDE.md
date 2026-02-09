@@ -7,6 +7,7 @@
 **현재 상태:**
 - ✅ LLM 통합 완료! Claude Sonnet 4.5를 사용하여 실제 레시피를 생성합니다.
 - ✅ 이미지 검색 통합 완료! Google Custom Search API로 한국 음식 이미지 정확도 80-90% 달성
+- ✅ Gemini 이미지 생성 통합! AI가 고품질 한국 음식 이미지를 직접 생성합니다.
 - ✅ Mock 모드 지원으로 API 키 없이도 개발 가능합니다.
 
 **타겟 사용자:** 빠른 요리 솔루션을 찾는 한국의 1인 가구 및 신혼부부
@@ -258,15 +259,17 @@ RecommendationCreate:
 
 - [x] ✅ 실제 레시피 생성을 위한 LLM 통합 (Claude Sonnet 4.5)
 - [x] ✅ 레시피 이미지 검색 (Google Custom Search API)
+- [x] ✅ AI 이미지 생성 (Gemini Imagen)
+- [x] ✅ 사용자 인증/계정 (JWT 기반 경량 인증)
+- [x] ✅ 레시피 즐겨찾기
+- [x] ✅ Tailwind CSS 설정
 
 ### 계획된 기능
 
-- [ ] PostgreSQL 데이터베이스 (Supabase 또는 Neon)
+- [ ] PostgreSQL 데이터베이스 (Supabase 또는 Neon) - 배포 후 진행 예정
 - [ ] 장보기 리스트용 쿠팡 파트너스 제휴 링크
 - [ ] 테스트 인프라 (현재 기본 테스트만 존재)
-- [ ] Tailwind CSS 설정 (계획에 언급되었으나 미설정)
-- [ ] 사용자 인증/계정
-- [ ] 레시피 평가/즐겨찾기
+- [ ] 레시피 평가
 - [ ] 영양 정보
 - [ ] 레시피 결과 캐싱 (비용 절감)
 
@@ -300,11 +303,15 @@ RecommendationCreate:
 1. `llm_adapter.py`의 `_build_system_prompt()` 함수 수정
 2. `_build_user_prompt()` 함수로 사용자 컨텍스트 구성
 
-**이미지 검색 수정:**
+**이미지 검색/생성 수정:**
 1. `image_search_service.py`의 `KOREAN_FOOD_TRANSLATIONS` 사전에 음식 추가
-2. `IMAGE_SEARCH_PROVIDER` 환경 변수로 제공자 선택 (google/unsplash/mock)
-3. 상세 문서: `back/IMAGE_SEARCH_README.md` 참고
-3. `python test_llm_integration.py`로 테스트
+2. `IMAGE_SEARCH_PROVIDER` 환경 변수로 제공자 선택:
+   - `google`: Google Custom Search API (검색 기반)
+   - `gemini`: Gemini Imagen (AI 생성, 권장)
+   - `unsplash`: Unsplash (폴백용)
+   - `mock`: 플레이스홀더 (테스트용)
+3. Gemini 사용 시: `GEMINI_API_KEY` 설정 필요
+4. `python test_llm_integration.py`로 테스트
 
 **Mock 모드 사용:**
 ```bash
@@ -375,12 +382,17 @@ LLM_MODEL=claude-sonnet-4-5-20250929
 LLM_TEMPERATURE=0.7
 LLM_MAX_TOKENS=4000
 
-# Image Search (google, unsplash, 또는 mock)
-IMAGE_SEARCH_PROVIDER=google
+# Image Search (google, gemini, unsplash, 또는 mock)
+IMAGE_SEARCH_PROVIDER=gemini
 GOOGLE_API_KEY=your-google-api-key-here
 GOOGLE_SEARCH_ENGINE_ID=your-search-engine-id-here
 IMAGE_SEARCH_TIMEOUT=3
 IMAGE_CACHE_ENABLED=true
+
+# Gemini Image Generation (IMAGE_SEARCH_PROVIDER=gemini 사용 시)
+# ⚠️ Google Cloud Billing 활성화 필요
+GEMINI_API_KEY=your-gemini-api-key-here
+GEMINI_IMAGE_MODEL=gemini-2.0-flash-exp-image-generation
 
 # Coupang (향후)
 COUPANG_PARTNERS_TRACKING_ID=
@@ -427,11 +439,11 @@ git show <commit-hash>
    - Mock 모드: `LLM_PROVIDER=mock`으로 API 키 없이 테스트 가능
    - 실제 모드: `ANTHROPIC_API_KEY` 환경 변수 필요
    - 상세 문서: `back/LLM_INTEGRATION_README.md`
-3. **이미지 검색 통합 완료:** `image_search_service.py`에서 Google API로 레시피 이미지 검색
+3. **이미지 검색/생성 통합 완료:** `image_search_service.py`에서 레시피 이미지 제공
    - Mock 모드: `IMAGE_SEARCH_PROVIDER=mock` (플레이스홀더 이미지)
-   - Unsplash: `IMAGE_SEARCH_PROVIDER=unsplash` (기존 방식)
-   - Google: `IMAGE_SEARCH_PROVIDER=google` (권장, API 키 필요)
-   - 상세 문서: `back/IMAGE_SEARCH_README.md`
+   - Gemini: `IMAGE_SEARCH_PROVIDER=gemini` (AI 생성, 권장, $0.039/이미지)
+   - Google: `IMAGE_SEARCH_PROVIDER=google` (검색 기반, API 키 필요)
+   - Unsplash: `IMAGE_SEARCH_PROVIDER=unsplash` (폴백용)
 4. **검증 필수:** `validation.py`의 엄격한 규칙 준수 (3개 레시피, 4-8 스텝, 시간 제한, 제외 재료)
 5. **인메모리 저장:** 데이터 영속성 없음을 인지하고 작업 (서버 재시작 시 데이터 사라짐)
 6. **타입 안전성:** Pydantic 모델을 통해 항상 타입 검증
