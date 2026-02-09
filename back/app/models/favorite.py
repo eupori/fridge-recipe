@@ -57,3 +57,15 @@ class FavoriteCheck(BaseModel):
     """즐겨찾기 여부 확인 응답"""
     is_favorite: bool
     favorite_id: str | None = None
+
+
+class RecipeLikeCount(BaseModel):
+    """개별 레시피 좋아요 수"""
+    recipe_index: int
+    like_count: int
+
+
+class RecommendationLikeStats(BaseModel):
+    """추천의 모든 레시피 좋아요 통계"""
+    recommendation_id: str
+    recipes: list[RecipeLikeCount]

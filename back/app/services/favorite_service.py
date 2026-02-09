@@ -7,10 +7,11 @@ Favorite service
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models.favorite import Favorite, FavoriteCreate, FavoriteResponse, FavoriteCheck
+from app.models.favorite import Favorite, FavoriteCreate, FavoriteResponse, FavoriteCheck, RecipeLikeCount, RecommendationLikeStats
 
 
 class FavoriteService:
@@ -104,6 +105,31 @@ class FavoriteService:
         return FavoriteCheck(
             is_favorite=favorite is not None,
             favorite_id=str(favorite.id) if favorite else None
+        )
+
+    def get_recommendation_like_stats(self, recommendation_id: str) -> RecommendationLikeStats:
+        """추천의 각 레시피별 좋아요 수 집계"""
+        results = (
+            self.db.query(
+                Favorite.recipe_index,
+                func.count(Favorite.id).label("like_count")
+            )
+            .filter(Favorite.recommendation_id == recommendation_id)
+            .group_by(Favorite.recipe_index)
+            .all()
+        )
+
+        # 기본값 0으로 초기화
+        stats = {0: 0, 1: 0, 2: 0}
+        for recipe_index, like_count in results:
+            stats[recipe_index] = like_count
+
+        return RecommendationLikeStats(
+            recommendation_id=recommendation_id,
+            recipes=[
+                RecipeLikeCount(recipe_index=idx, like_count=count)
+                for idx, count in sorted(stats.items())
+            ]
         )
 
 

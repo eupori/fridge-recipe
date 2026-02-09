@@ -12,9 +12,18 @@ type Props = {
   recipeIndex: number;
   recipeTitle: string;
   recipeImageUrl: string | null;
+  likeCount?: number;
+  onFavoriteChange?: (isFavorite: boolean) => void;
 };
 
-export function FavoriteButton({ recommendationId, recipeIndex, recipeTitle, recipeImageUrl }: Props) {
+function formatLikeCount(count: number): string {
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1).replace(/\.0$/, "")}k`;
+  }
+  return count.toString();
+}
+
+export function FavoriteButton({ recommendationId, recipeIndex, recipeTitle, recipeImageUrl, likeCount = 0, onFavoriteChange }: Props) {
   const { user } = useAuth();
   const router = useRouter();
   const [isFavorite, setIsFavorite] = useState(false);
@@ -36,7 +45,19 @@ export function FavoriteButton({ recommendationId, recipeIndex, recipeTitle, rec
 
   const handleClick = async () => {
     if (!user) {
-      router.push("/login");
+      // pendingFavorite 저장 (로그인 후 자동 즐겨찾기 처리용)
+      const pendingFavorite = {
+        recommendationId,
+        recipeIndex,
+        recipeTitle,
+        recipeImageUrl,
+        timestamp: Date.now()
+      };
+      localStorage.setItem("pendingFavorite", JSON.stringify(pendingFavorite));
+
+      // returnUrl과 함께 로그인 페이지로 이동
+      const currentPath = window.location.pathname;
+      router.push(`/login?returnUrl=${encodeURIComponent(currentPath)}`);
       return;
     }
 
@@ -46,10 +67,12 @@ export function FavoriteButton({ recommendationId, recipeIndex, recipeTitle, rec
         await removeFavorite(favoriteId);
         setIsFavorite(false);
         setFavoriteId(null);
+        onFavoriteChange?.(false);
       } else {
         const result = await addFavorite(recommendationId, recipeIndex, recipeTitle, recipeImageUrl);
         setIsFavorite(true);
         setFavoriteId(result.id);
+        onFavoriteChange?.(true);
       }
     } catch (err) {
       console.error("즐겨찾기 처리 실패:", err);
@@ -59,14 +82,21 @@ export function FavoriteButton({ recommendationId, recipeIndex, recipeTitle, rec
   };
 
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={handleClick}
-      disabled={loading}
-      className={isFavorite ? "text-red-500 hover:text-red-600" : "text-muted-foreground hover:text-red-500"}
-    >
-      <Heart className={`w-5 h-5 ${isFavorite ? "fill-current" : ""}`} />
-    </Button>
+    <div className="flex items-center gap-1">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={handleClick}
+        disabled={loading}
+        className={isFavorite ? "text-red-500 hover:text-red-600" : "text-muted-foreground hover:text-red-500"}
+      >
+        <Heart className={`w-5 h-5 ${isFavorite ? "fill-current" : ""}`} />
+      </Button>
+      {likeCount > 0 && (
+        <span className="text-sm text-muted-foreground font-medium min-w-[1.5ch]">
+          {formatLikeCount(likeCount)}
+        </span>
+      )}
+    </div>
   );
 }

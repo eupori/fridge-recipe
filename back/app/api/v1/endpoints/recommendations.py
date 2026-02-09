@@ -1,10 +1,16 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
+from app.core.database import get_db
 from app.models.recommendation import (
     RecommendationCreate,
     RecommendationResponse,
 )
+from app.models.search_history import SearchHistoryCreate
+from app.models.user import User
+from app.services.auth_service import get_current_user_optional
 from app.services.recommendation_service import create_recommendation, get_recommendation
+from app.services.search_history_service import SearchHistoryService
 
 router = APIRouter()
 
@@ -47,7 +53,11 @@ router = APIRouter()
         400: {"description": "잘못된 요청 (검증 실패)"},
     }
 )
-async def post_recommendations(payload: RecommendationCreate):
+async def post_recommendations(
+    payload: RecommendationCreate,
+    current_user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
     """
     ## 레시피 추천 생성
 
@@ -67,7 +77,24 @@ async def post_recommendations(payload: RecommendationCreate):
     - 통합된 장보기 리스트 (중복 제거됨)
     """
     try:
-        return await create_recommendation(payload)
+        response = await create_recommendation(payload)
+
+        # 로그인 사용자의 경우 검색 기록 저장
+        if current_user:
+            search_history_service = SearchHistoryService(db)
+            search_history_service.create(
+                user_id=current_user.id,
+                data=SearchHistoryCreate(
+                    recommendation_id=response.id,
+                    ingredients=payload.ingredients,
+                    time_limit_min=payload.constraints.time_limit_min,
+                    servings=payload.constraints.servings,
+                    recipe_titles=[r.title for r in response.recipes],
+                    recipe_images=[r.image_url for r in response.recipes],
+                ),
+            )
+
+        return response
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

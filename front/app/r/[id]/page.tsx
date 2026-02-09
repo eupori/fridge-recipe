@@ -1,38 +1,167 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getRecommendation } from "../../../lib/api";
+import { getRecommendation, addFavorite, getRecipeLikeStats, RecommendationLikeStats } from "../../../lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Clock, Users, ChefHat, ShoppingCart, Lightbulb, ChevronDown, ChevronUp } from "lucide-react";
+import { Clock, Users, ChefHat, ShoppingCart, Lightbulb, ChevronDown, ChevronUp, Plus, Check } from "lucide-react";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { useAuth } from "@/lib/auth-context";
+
+const PANTRY_STORAGE_KEY = "pantry-items";
 
 export default function ResultPage({ params }: { params: { id: string } }) {
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const [likeStats, setLikeStats] = useState<RecommendationLikeStats | null>(null);
+  const [pantryItems, setPantryItems] = useState<string[]>([]);
+  const { user } = useAuth();
+
+  // 보유 재료 로드
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(PANTRY_STORAGE_KEY);
+      if (stored) {
+        setPantryItems(JSON.parse(stored));
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // 보유 재료에 추가
+  const addToPantry = (item: string) => {
+    const trimmed = item.trim();
+    if (!trimmed || pantryItems.includes(trimmed)) return;
+
+    const updated = [...pantryItems, trimmed];
+    setPantryItems(updated);
+    localStorage.setItem(PANTRY_STORAGE_KEY, JSON.stringify(updated));
+  };
+
+  // 보유 재료 여부 확인
+  const isInPantry = (item: string) => {
+    return pantryItems.includes(item.trim());
+  };
 
   useEffect(() => {
     (async () => {
       try {
-        const rec = await getRecommendation(params.id);
+        // 추천 데이터와 좋아요 통계를 병렬로 로드
+        const [rec, stats] = await Promise.all([
+          getRecommendation(params.id),
+          getRecipeLikeStats(params.id),
+        ]);
         setData(rec);
+        setLikeStats(stats);
       } catch (e: any) {
         setError(e?.message ?? "불러오기에 실패했습니다");
       }
     })();
   }, [params.id]);
 
+  // 로그인 후 pendingFavorite 자동 처리
+  // 별도의 state로 처리 완료 여부 추적하여 FavoriteButton과 동기화
+  const [pendingProcessed, setPendingProcessed] = useState<{recipeIndex: number} | null>(null);
+
+  useEffect(() => {
+    const processPendingFavorite = async () => {
+      if (!user) return;
+
+      const pendingStr = localStorage.getItem("pendingFavorite");
+      if (!pendingStr) return;
+
+      try {
+        const pending = JSON.parse(pendingStr);
+
+        // 10분 타임아웃 체크
+        if (Date.now() - pending.timestamp > 10 * 60 * 1000) {
+          localStorage.removeItem("pendingFavorite");
+          return;
+        }
+
+        // 현재 페이지의 추천 ID와 일치하면 자동 즐겨찾기
+        if (pending.recommendationId === params.id) {
+          try {
+            await addFavorite(
+              pending.recommendationId,
+              pending.recipeIndex,
+              pending.recipeTitle,
+              pending.recipeImageUrl
+            );
+            // 성공 시 좋아요 수 업데이트
+            handleFavoriteChange(pending.recipeIndex, true);
+            setPendingProcessed({ recipeIndex: pending.recipeIndex });
+          } catch (err: any) {
+            // 이미 즐겨찾기된 경우 무시 (중복 에러)
+            if (err.message?.includes("이미 즐겨찾기")) {
+              setPendingProcessed({ recipeIndex: pending.recipeIndex });
+            }
+          }
+          localStorage.removeItem("pendingFavorite");
+        }
+      } catch (e) {
+        // 파싱 실패 시 pendingFavorite 삭제
+        localStorage.removeItem("pendingFavorite");
+      }
+    };
+
+    processPendingFavorite();
+  }, [user, params.id]);
+
   const toggleExpand = (idx: number) => {
     setExpandedIdx(expandedIdx === idx ? null : idx);
   };
 
+  const getLikeCountForRecipe = (recipeIndex: number): number => {
+    if (!likeStats) return 0;
+    const recipe = likeStats.recipes.find((r) => r.recipe_index === recipeIndex);
+    return recipe?.like_count ?? 0;
+  };
+
+  const handleFavoriteChange = (recipeIndex: number, isFavorite: boolean) => {
+    setLikeStats((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        recipes: prev.recipes.map((r) =>
+          r.recipe_index === recipeIndex
+            ? { ...r, like_count: r.like_count + (isFavorite ? 1 : -1) }
+            : r
+        ),
+      };
+    });
+  };
+
   if (error) {
+    const isNotFound = error.includes("not_found") || error.includes("404");
     return (
       <main className="container max-w-3xl mx-auto py-10 px-4">
-        <div className="p-4 bg-destructive/10 text-destructive rounded-md">{error}</div>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <ChefHat className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+            {isNotFound ? (
+              <>
+                <h2 className="text-xl font-bold mb-2">레시피를 찾을 수 없습니다</h2>
+                <p className="text-muted-foreground mb-6">
+                  서버가 재시작되어 이전 검색 결과가 사라졌습니다.<br />
+                  동일한 재료로 다시 검색해보세요.
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="text-xl font-bold mb-2">오류가 발생했습니다</h2>
+                <p className="text-muted-foreground mb-6">{error}</p>
+              </>
+            )}
+            <Button asChild>
+              <a href="/">새로 검색하기</a>
+            </Button>
+          </CardContent>
+        </Card>
       </main>
     );
   }
@@ -47,13 +176,6 @@ export default function ResultPage({ params }: { params: { id: string } }) {
 
   return (
     <main className="container max-w-4xl mx-auto py-10 px-4">
-      <Button variant="ghost" asChild className="mb-6">
-        <a href="/">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          다시 입력
-        </a>
-      </Button>
-
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-2">
           <ChefHat className="w-6 h-6" />
@@ -89,10 +211,13 @@ export default function ResultPage({ params }: { params: { id: string } }) {
                       <h3 className="font-bold text-lg leading-tight">{r.title}</h3>
                       <div className="flex items-center gap-1">
                         <FavoriteButton
+                          key={pendingProcessed?.recipeIndex === idx ? "processed" : "initial"}
                           recommendationId={data.id}
                           recipeIndex={idx}
                           recipeTitle={r.title}
                           recipeImageUrl={r.image_url}
+                          likeCount={getLikeCountForRecipe(idx)}
+                          onFavoriteChange={(isFav) => handleFavoriteChange(idx, isFav)}
                         />
                         <Badge variant="secondary" className="shrink-0">
                           {idx + 1}
@@ -242,16 +367,46 @@ export default function ResultPage({ params }: { params: { id: string } }) {
             <ShoppingCart className="w-5 h-5" />
             <h2 className="font-bold text-lg">장보기 리스트</h2>
           </div>
-          <p className="text-sm text-muted-foreground mb-4">3개 레시피에 필요한 추가 재료 모음</p>
+          <p className="text-sm text-muted-foreground mb-4">
+            3개 레시피에 필요한 추가 재료 모음 (클릭하면 보유 재료에 추가)
+          </p>
 
           {(data.shopping_list || []).length > 0 ? (
             <ul className="grid md:grid-cols-2 gap-2">
-              {data.shopping_list.map((it: any, idx: number) => (
-                <li key={idx} className="flex items-center gap-2 text-sm">
-                  <span className="w-1.5 h-1.5 bg-primary rounded-full" />
-                  {it.item}
-                </li>
-              ))}
+              {data.shopping_list.map((it: any, idx: number) => {
+                const inPantry = isInPantry(it.item);
+                return (
+                  <li key={idx} className="flex items-center justify-between text-sm group">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-1.5 h-1.5 rounded-full ${inPantry ? "bg-green-500" : "bg-primary"}`} />
+                      <span className={inPantry ? "line-through text-muted-foreground" : ""}>
+                        {it.item}
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => addToPantry(it.item)}
+                      disabled={inPantry}
+                      className={`h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity ${
+                        inPantry ? "opacity-100" : ""
+                      }`}
+                    >
+                      {inPantry ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 mr-1 text-green-500" />
+                          <span className="text-xs text-green-600">추가됨</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-3.5 h-3.5 mr-1" />
+                          <span className="text-xs">보유재료에 추가</span>
+                        </>
+                      )}
+                    </Button>
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <p className="text-sm text-muted-foreground">모든 재료를 보유하고 있습니다!</p>

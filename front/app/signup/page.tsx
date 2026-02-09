@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signup, login } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -10,14 +10,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
-export default function SignupPage() {
+function SignupForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { checkAuth } = useAuth();
+
+  // returnUrl 파라미터 (없으면 홈으로)
+  const returnUrl = searchParams.get("returnUrl") || "/";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +39,7 @@ export default function SignupPage() {
       // 회원가입 성공 후 자동 로그인
       await login(email, password);
       await checkAuth();
-      router.push("/");
+      router.push(returnUrl);
     } catch (err: any) {
       setError(err.message || "회원가입에 실패했습니다.");
     } finally {
@@ -44,71 +48,79 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="container max-w-md mx-auto py-16 px-4">
-      <Card>
-        <CardHeader className="text-center">
-          <h1 className="text-2xl font-bold">회원가입</h1>
-          <p className="text-muted-foreground">간편하게 가입하고 즐겨찾기를 저장하세요</p>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="p-3 bg-destructive/10 text-destructive text-sm rounded-md">
-                {error}
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="email">이메일</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="email@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+    <Card>
+      <CardHeader className="text-center">
+        <h1 className="text-2xl font-bold">회원가입</h1>
+        <p className="text-muted-foreground">간편하게 가입하고 즐겨찾기를 저장하세요</p>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="p-3 bg-destructive/10 text-destructive text-sm rounded-md">
+              {error}
             </div>
+          )}
 
-            <div className="space-y-2">
-              <Label htmlFor="password">비밀번호</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="6자 이상"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">비밀번호 확인</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="비밀번호를 다시 입력하세요"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                minLength={6}
-              />
-            </div>
-
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "가입 중..." : "회원가입"}
-            </Button>
-          </form>
-
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            이미 계정이 있으신가요?{" "}
-            <Link href="/login" className="text-primary hover:underline">
-              로그인
-            </Link>
+          <div className="space-y-2">
+            <Label htmlFor="email">이메일</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="email@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
           </div>
-        </CardContent>
-      </Card>
+
+          <div className="space-y-2">
+            <Label htmlFor="password">비밀번호</Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="6자 이상"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword">비밀번호 확인</Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              placeholder="비밀번호를 다시 입력하세요"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={6}
+            />
+          </div>
+
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "가입 중..." : "회원가입"}
+          </Button>
+        </form>
+
+        <div className="mt-6 text-center text-sm text-muted-foreground">
+          이미 계정이 있으신가요?{" "}
+          <Link href={`/login?returnUrl=${encodeURIComponent(returnUrl)}`} className="text-primary hover:underline">
+            로그인
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <main className="container max-w-md mx-auto py-16 px-4">
+      <Suspense fallback={<div className="text-center text-muted-foreground">로딩 중...</div>}>
+        <SignupForm />
+      </Suspense>
     </main>
   );
 }

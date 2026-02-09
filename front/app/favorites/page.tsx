@@ -7,7 +7,7 @@ import { getFavorites, removeFavorite, FavoriteResponse } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, Heart, Trash2, ChefHat } from "lucide-react";
+import { Heart, Trash2, ChefHat } from "lucide-react";
 
 export default function FavoritesPage() {
   const { user, loading: authLoading } = useAuth();
@@ -58,13 +58,6 @@ export default function FavoritesPage() {
 
   return (
     <main className="container max-w-3xl mx-auto py-10 px-4">
-      <Button variant="ghost" asChild className="mb-6">
-        <Link href="/">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          홈으로
-        </Link>
-      </Button>
-
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-2">
           <Heart className="w-6 h-6 text-red-500 fill-red-500" />

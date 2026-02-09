@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 
-from app.models.favorite import FavoriteCreate, FavoriteResponse, FavoriteCheck
+from app.models.favorite import FavoriteCreate, FavoriteResponse, FavoriteCheck, RecommendationLikeStats
 from app.models.user import User
 from app.services.auth_service import get_current_user
 from app.services.favorite_service import FavoriteService, get_favorite_service
@@ -79,3 +79,16 @@ def check_favorite(
         recommendation_id,
         recipe_index
     )
+
+
+@router.get("/stats/{recommendation_id}", response_model=RecommendationLikeStats)
+def get_like_stats(
+    recommendation_id: str,
+    favorite_service: FavoriteService = Depends(get_favorite_service)
+):
+    """
+    추천의 각 레시피별 좋아요 수 조회
+
+    인증 불필요 - 누구나 조회 가능
+    """
+    return favorite_service.get_recommendation_like_stats(recommendation_id)

@@ -196,3 +196,79 @@ export async function checkFavorite(
   }
   return res.json();
 }
+
+// Like stats types
+export type RecipeLikeCount = {
+  recipe_index: number;
+  like_count: number;
+};
+
+export type RecommendationLikeStats = {
+  recommendation_id: string;
+  recipes: RecipeLikeCount[];
+};
+
+export async function getRecipeLikeStats(
+  recommendationId: string
+): Promise<RecommendationLikeStats> {
+  const res = await fetch(`${API_BASE}/favorites/stats/${recommendationId}`);
+  if (!res.ok) {
+    // 에러 시 기본값 반환
+    return {
+      recommendation_id: recommendationId,
+      recipes: [
+        { recipe_index: 0, like_count: 0 },
+        { recipe_index: 1, like_count: 0 },
+        { recipe_index: 2, like_count: 0 },
+      ],
+    };
+  }
+  return res.json();
+}
+
+// Search History types
+export type SearchHistoryResponse = {
+  id: string;
+  recommendation_id: string;
+  ingredients: string[];
+  time_limit_min: number;
+  servings: number;
+  recipe_titles: string[];
+  recipe_images: (string | null)[];
+  searched_at: string;
+};
+
+// Search History API
+export async function getSearchHistories(limit?: number): Promise<SearchHistoryResponse[]> {
+  const params = limit ? `?limit=${limit}` : "";
+  const res = await fetch(`${API_BASE}/search-histories${params}`, {
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) {
+    return [];
+  }
+  return res.json();
+}
+
+export async function deleteSearchHistory(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/search-histories/${id}`, {
+    method: "DELETE",
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `HTTP ${res.status}`);
+  }
+}
+
+export async function clearAllSearchHistories(): Promise<{ deleted_count: number }> {
+  const res = await fetch(`${API_BASE}/search-histories/all`, {
+    method: "DELETE",
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
