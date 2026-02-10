@@ -1,0 +1,41 @@
+service: fridge-recipe-api
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: python3.11
+  region: ap-northeast-2
+  memorySize: 512
+  timeout: 60
+  architecture: x86_64
+  environment:
+    APP_ENV: ${opt:stage, 'prod'}
+    DATABASE_URL: ${env:DATABASE_URL}
+    JWT_SECRET_KEY: ${env:JWT_SECRET_KEY}
+    CORS_ORIGINS: ${env:CORS_ORIGINS, 'https://fridge-recipe.vercel.app'}
+    ANTHROPIC_API_KEY: ${env:ANTHROPIC_API_KEY}
+    GEMINI_API_KEY: ${env:GEMINI_API_KEY}
+    LLM_PROVIDER: ${env:LLM_PROVIDER, 'anthropic'}
+    IMAGE_SEARCH_PROVIDER: ${env:IMAGE_SEARCH_PROVIDER, 'gemini'}
+    IMAGE_CACHE_ENABLED: "false"
+
+functions:
+  api:
+    handler: handler.handler
+    events:
+      - httpApi:
+          path: /
+          method: ANY
+      - httpApi:
+          path: /{proxy+}
+          method: ANY
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    dockerizePip: true
+    slim: true
+    strip: false

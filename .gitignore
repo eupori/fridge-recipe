@@ -15,3 +15,11 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# AWS SAM
+.aws-sam/
+samconfig.toml
+
+# Serverless Framework
+.serverless/
+node_modules/

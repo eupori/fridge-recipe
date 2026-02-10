@@ -10,8 +10,11 @@ from app.api.v1.router import api_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """앱 시작 시 DB 테이블 생성"""
-    create_tables()
+    """앱 시작 시 DB 테이블 생성 (로컬 개발 환경에서만)"""
+    # Lambda에서는 lifespan이 비활성화되고, Supabase에 테이블이 이미 존재
+    # 로컬 개발 시에만 테이블 자동 생성
+    if settings.app_env == "dev":
+        create_tables()
     yield
 
 

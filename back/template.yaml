@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Fridge-Recipe API - FastAPI on AWS Lambda
+
+Globals:
+  Function:
+    Timeout: 60
+    MemorySize: 512
+    Runtime: python3.11
+    Architectures:
+      - x86_64
+
+Parameters:
+  AppEnv:
+    Type: String
+    Default: prod
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+  DatabaseUrl:
+    Type: String
+    Description: PostgreSQL connection string (Supabase)
+    NoEcho: true
+  JwtSecretKey:
+    Type: String
+    Description: JWT signing secret
+    NoEcho: true
+  CorsOrigins:
+    Type: String
+    Default: https://fridge-recipe.vercel.app
+    Description: Comma-separated allowed origins
+  AnthropicApiKey:
+    Type: String
+    Description: Anthropic API key for Claude
+    NoEcho: true
+  GeminiApiKey:
+    Type: String
+    Description: Google Gemini API key for image generation
+    NoEcho: true
+  LlmProvider:
+    Type: String
+    Default: anthropic
+    AllowedValues:
+      - anthropic
+      - mock
+  ImageSearchProvider:
+    Type: String
+    Default: gemini
+    AllowedValues:
+      - google
+      - gemini
+      - unsplash
+      - mock
+
+Resources:
+  FridgeRecipeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handler.handler
+      CodeUri: .
+      Description: Fridge-Recipe FastAPI backend
+      Environment:
+        Variables:
+          APP_ENV: !Ref AppEnv
+          DATABASE_URL: !Ref DatabaseUrl
+          JWT_SECRET_KEY: !Ref JwtSecretKey
+          CORS_ORIGINS: !Ref CorsOrigins
+          ANTHROPIC_API_KEY: !Ref AnthropicApiKey
+          GEMINI_API_KEY: !Ref GeminiApiKey
+          LLM_PROVIDER: !Ref LlmProvider
+          IMAGE_SEARCH_PROVIDER: !Ref ImageSearchProvider
+          IMAGE_CACHE_ENABLED: "false"
+      Events:
+        ApiRoot:
+          Type: HttpApi
+          Properties:
+            Path: /
+            Method: ANY
+        ApiProxy:
+          Type: HttpApi
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+      Policies:
+        - AWSLambdaBasicExecutionRole
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  FunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt FridgeRecipeFunction.Arn

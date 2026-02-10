@@ -1,0 +1,27 @@
+# SAM configuration example
+# Copy to samconfig.toml and fill in your values
+
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "fridge-recipe-api"
+resolve_s3 = true
+s3_prefix = "fridge-recipe-api"
+region = "ap-northeast-2"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+
+parameter_overrides = """
+AppEnv=prod
+DatabaseUrl=postgresql+psycopg://postgres.[project-ref]:[password]@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres
+JwtSecretKey=your-super-secret-jwt-key-here
+CorsOrigins=https://fridge-recipe.vercel.app
+AnthropicApiKey=sk-ant-your-key-here
+GeminiApiKey=your-gemini-key-here
+LlmProvider=anthropic
+ImageSearchProvider=gemini
+"""
+
+[default.build.parameters]
+cached = true
+parallel = true
