@@ -8,7 +8,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from pydantic import BaseModel
-from sqlalchemy import Column, String, DateTime, Integer, ForeignKey
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -18,6 +18,7 @@ from app.core.database import Base
 # SQLAlchemy ORM 모델
 class Favorite(Base):
     """즐겨찾기 DB 모델"""
+
     __tablename__ = "favorites"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -35,6 +36,7 @@ class Favorite(Base):
 # Pydantic 스키마
 class FavoriteCreate(BaseModel):
     """즐겨찾기 추가 요청"""
+
     recommendation_id: str
     recipe_index: int  # 0, 1, 2
     recipe_title: str
@@ -43,6 +45,7 @@ class FavoriteCreate(BaseModel):
 
 class FavoriteResponse(BaseModel):
     """즐겨찾기 응답"""
+
     id: str
     recommendation_id: str
     recipe_index: int
@@ -55,17 +58,20 @@ class FavoriteResponse(BaseModel):
 
 class FavoriteCheck(BaseModel):
     """즐겨찾기 여부 확인 응답"""
+
     is_favorite: bool
     favorite_id: str | None = None
 
 
 class RecipeLikeCount(BaseModel):
     """개별 레시피 좋아요 수"""
+
     recipe_index: int
     like_count: int
 
 
 class RecommendationLikeStats(BaseModel):
     """추천의 모든 레시피 좋아요 통계"""
+
     recommendation_id: str
     recipes: list[RecipeLikeCount]

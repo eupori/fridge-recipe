@@ -2,29 +2,108 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+import re
+from datetime import UTC, datetime
 from uuid import uuid4
+
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.recommendation import (
-    RecommendationCreate,
-    RecommendationResponse,
     Recipe,
+    RecommendationCreate,
+    RecommendationRecord,
+    RecommendationResponse,
     ShoppingItem,
 )
-from app.services.llm_adapter import RecipeLLMAdapter, MockRecipeLLMAdapter
 from app.services.image_search_service import ImageSearchService
+from app.services.llm_adapter import MockRecipeLLMAdapter, RecipeLLMAdapter
 from app.services.validation import validate_response
 
 logger = logging.getLogger(__name__)
 
-# NOTE: MVP용 인메모리 저장소(배포/재시작 시 사라짐)
-_STORE: dict[str, RecommendationResponse] = {}
+
+def normalize_ingredient(ingredient: str) -> str:
+    """
+    재료명에서 분량, 수량, 수식어를 제거하여 정규화
+
+    예시:
+        "신선한 계란 1개" -> "계란"
+        "계란 2개" -> "계란"
+        "김치 100g" -> "김치"
+        "다진 마늘 1큰술" -> "마늘"
+    """
+    if not ingredient:
+        return ""
+
+    text = ingredient.strip()
+
+    # 1. 분량/수량 패턴 제거 (숫자 + 단위)
+    # 예: "1개", "2큰술", "100g", "1/2컵" 등
+    text = re.sub(
+        r"\d+(/\d+)?\s*(개|g|kg|ml|L|큰술|작은술|컵|줌|꼬집|조각|장|쪽|알|마리|근|톨|봉지|팩|통|캔)?",
+        "",
+        text,
+    )
+
+    # 2. 흔한 수식어 제거
+    modifiers = [
+        "신선한",
+        "싱싱한",
+        "잘 익은",
+        "익은",
+        "다진",
+        "썬",
+        "채썬",
+        "굵게 썬",
+        "얇게 썬",
+        "작게 썬",
+        "큼직하게 썬",
+        "곱게 간",
+        "갈아놓은",
+        "삶은",
+        "데친",
+        "냉동",
+        "해동한",
+        "적당량",
+        "약간",
+        "조금",
+        "충분한",
+        "넉넉한",
+    ]
+    for mod in modifiers:
+        text = text.replace(mod, "")
+
+    # 3. 앞뒤 공백 제거 및 중간 공백 정리
+    text = " ".join(text.split()).strip()
+
+    return text
+
+
+def deduplicate_shopping_list(ingredients: set[str]) -> list[str]:
+    """
+    장보기 리스트에서 중복 재료 제거 (정규화 후 비교)
+
+    Args:
+        ingredients: 필요한 재료 집합
+
+    Returns:
+        중복 제거된 재료 리스트 (정렬됨)
+    """
+    # 정규화된 재료명 -> 원본 재료명 매핑 (첫 번째 것 유지)
+    normalized_map: dict[str, str] = {}
+
+    for ing in ingredients:
+        normalized = normalize_ingredient(ing)
+        if normalized and normalized not in normalized_map:
+            # 정규화된 이름을 저장 (분량 없는 깔끔한 이름)
+            normalized_map[normalized] = normalized
+
+    return sorted(normalized_map.values())
 
 
 def split_have_need(
-    user_ingredients: list[str],
-    recipe_ingredients: list[str]
+    user_ingredients: list[str], recipe_ingredients: list[str]
 ) -> tuple[list[str], list[str]]:
     """
     사용자 재료와 레시피 재료를 비교하여 보유/필요 재료 분리
@@ -41,7 +120,6 @@ def split_have_need(
     recipe_set = {i.strip().lower() for i in recipe_ingredients if i and i.strip()}
 
     # 원본 대소문자 유지를 위해 매핑 생성
-    user_map = {i.strip().lower(): i.strip() for i in user_ingredients if i and i.strip()}
     recipe_map = {i.strip().lower(): i.strip() for i in recipe_ingredients if i and i.strip()}
 
     # 보유 재료: 사용자가 가진 것 중 레시피에 필요한 것
@@ -55,7 +133,9 @@ def split_have_need(
     return have, need
 
 
-async def create_recommendation(payload: RecommendationCreate) -> RecommendationResponse:
+async def create_recommendation(
+    payload: RecommendationCreate, db: Session
+) -> RecommendationResponse:
     """
     사용자 재료로 레시피 추천 생성 (LLM 통합 + 이미지 검색)
 
@@ -84,19 +164,13 @@ async def create_recommendation(payload: RecommendationCreate) -> Recommendation
 
     # 4. 이미지 병렬 검색 (3개 레시피 동시 처리)
     logger.info(f"이미지 검색 시작: {len(recipes_raw)}개 레시피")
-    image_tasks = [
-        image_service.get_image(recipe.title)
-        for recipe in recipes_raw
-    ]
+    image_tasks = [image_service.get_image(recipe.title) for recipe in recipes_raw]
     image_results = await asyncio.gather(*image_tasks, return_exceptions=True)
 
     # 5. ingredients_have, ingredients_need 분리 + 이미지 URL 추가
     final_recipes = []
-    for recipe, img_result in zip(recipes_raw, image_results):
-        have, need = split_have_need(
-            payload.ingredients,
-            recipe.ingredients_total
-        )
+    for recipe, img_result in zip(recipes_raw, image_results, strict=False):
+        have, need = split_have_need(payload.ingredients, recipe.ingredients_total)
 
         # 이미지 검색 실패 처리
         if isinstance(img_result, Exception):
@@ -117,36 +191,57 @@ async def create_recommendation(payload: RecommendationCreate) -> Recommendation
             ingredients_need=need,
             steps=recipe.steps,
             tips=recipe.tips or [],
-            warnings=recipe.warnings or []
+            warnings=recipe.warnings or [],
         )
         final_recipes.append(final_recipe)
 
     logger.info(f"이미지 검색 완료: {sum(1 for r in final_recipes if r.image_url)}개 성공")
 
-    # 4. 장보기 리스트 생성 (모든 레시피의 필요 재료 중복 제거)
+    # 4. 장보기 리스트 생성 (모든 레시피의 필요 재료 중복 제거 + 정규화)
     all_need: set[str] = set()
     for r in final_recipes:
         all_need |= {x for x in r.ingredients_need if x}
 
-    shopping_list = [ShoppingItem(item=i) for i in sorted(list(all_need))]
+    # 정규화하여 중복 제거 (예: "계란 1개", "계란 2개" → "계란")
+    deduplicated = deduplicate_shopping_list(all_need)
+    shopping_list = [ShoppingItem(item=i) for i in deduplicated]
 
     # 5. 응답 객체 생성
     rec_id = f"rec_{uuid4().hex[:10]}"
     response = RecommendationResponse(
-        id=rec_id,
-        created_at=datetime.now(timezone.utc),
-        recipes=final_recipes,
-        shopping_list=shopping_list
+        id=rec_id, created_at=datetime.now(UTC), recipes=final_recipes, shopping_list=shopping_list
     )
 
     # 6. 검증 (LLM 출력이 규칙 만족하는지 확인)
     validate_response(response, payload)
 
-    # 7. 메모리 저장 및 반환
-    _STORE[rec_id] = response
+    # 7. DB 저장 및 반환
+    record = RecommendationRecord(
+        id=rec_id, created_at=response.created_at, data=response.model_dump(mode="json")
+    )
+    db.add(record)
+    db.commit()
+
     logger.info(f"레시피 생성 완료: ID={rec_id}")
     return response
 
 
-def get_recommendation(recommendation_id: str) -> RecommendationResponse | None:
-    return _STORE.get(recommendation_id)
+def get_recommendation(recommendation_id: str, db: Session) -> RecommendationResponse | None:
+    """
+    DB에서 추천 결과 조회
+
+    Args:
+        recommendation_id: 추천 ID (rec_로 시작)
+        db: DB 세션
+
+    Returns:
+        RecommendationResponse 또는 None (없을 경우)
+    """
+    record = (
+        db.query(RecommendationRecord).filter(RecommendationRecord.id == recommendation_id).first()
+    )
+
+    if not record:
+        return None
+
+    return RecommendationResponse.model_validate(record.data)

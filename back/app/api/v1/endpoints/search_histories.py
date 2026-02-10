@@ -18,7 +18,6 @@ from app.services.search_history_service import (
     get_search_history_service,
 )
 
-
 router = APIRouter()
 
 

@@ -8,9 +8,8 @@ Authentication API endpoints
 
 from fastapi import APIRouter, Depends
 
-from app.models.user import UserCreate, UserLogin, UserResponse, TokenResponse, User
+from app.models.user import TokenResponse, User, UserCreate, UserLogin, UserResponse
 from app.services.auth_service import AuthService, get_auth_service, get_current_user
-
 
 router = APIRouter()
 
@@ -52,5 +51,5 @@ async def get_me(current_user: User = Depends(get_current_user)):
         id=str(current_user.id),
         email=current_user.email,
         nickname=current_user.nickname,
-        created_at=current_user.created_at
+        created_at=current_user.created_at,
     )

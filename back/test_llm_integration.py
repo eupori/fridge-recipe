@@ -8,16 +8,17 @@ Usage:
     # 실제 Claude API 사용
     ANTHROPIC_API_KEY=sk-ant-... python test_llm_integration.py
 """
-import sys
-import os
+
 import asyncio
+import os
+import sys
 
 # 프로젝트 루트를 PYTHONPATH에 추가
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app.models.recommendation import RecommendationCreate, Constraints
-from app.services.recommendation_service import create_recommendation
 from app.core.config import settings
+from app.models.recommendation import Constraints, RecommendationCreate
+from app.services.recommendation_service import create_recommendation
 
 
 async def test_basic_recipe_generation():
@@ -33,11 +34,8 @@ async def test_basic_recipe_generation():
     payload = RecommendationCreate(
         ingredients=["계란", "김치", "양파", "밥"],
         constraints=Constraints(
-            time_limit_min=15,
-            servings=1,
-            tools=["프라이팬", "전자레인지"],
-            exclude=["우유"]
-        )
+            time_limit_min=15, servings=1, tools=["프라이팬", "전자레인지"], exclude=["우유"]
+        ),
     )
 
     print("입력 재료:", ", ".join(payload.ingredients))
@@ -60,9 +58,15 @@ async def test_basic_recipe_generation():
             print(f"  조리 시간: {recipe.time_min}분")
             print(f"  인분: {recipe.servings}인분")
             print(f"  요약: {recipe.summary}")
-            print(f"  전체 재료 ({len(recipe.ingredients_total)}개): {', '.join(recipe.ingredients_total)}")
-            print(f"  보유 재료 ({len(recipe.ingredients_have)}개): {', '.join(recipe.ingredients_have) or '없음'}")
-            print(f"  필요 재료 ({len(recipe.ingredients_need)}개): {', '.join(recipe.ingredients_need) or '없음'}")
+            print(
+                f"  전체 재료 ({len(recipe.ingredients_total)}개): {', '.join(recipe.ingredients_total)}"
+            )
+            print(
+                f"  보유 재료 ({len(recipe.ingredients_have)}개): {', '.join(recipe.ingredients_have) or '없음'}"
+            )
+            print(
+                f"  필요 재료 ({len(recipe.ingredients_need)}개): {', '.join(recipe.ingredients_need) or '없음'}"
+            )
             print(f"  조리 단계 ({len(recipe.steps)}개):")
             for j, step in enumerate(recipe.steps, 1):
                 print(f"    {j}. {step}")
@@ -85,6 +89,7 @@ async def test_basic_recipe_generation():
     except Exception as e:
         print(f"\n❌ 에러 발생: {str(e)}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 
@@ -97,11 +102,7 @@ async def test_exclude_ingredients():
 
     payload = RecommendationCreate(
         ingredients=["계란", "밥"],
-        constraints=Constraints(
-            time_limit_min=10,
-            servings=1,
-            exclude=["김치", "우유"]
-        )
+        constraints=Constraints(time_limit_min=10, servings=1, exclude=["김치", "우유"]),
     )
 
     print("입력 재료:", ", ".join(payload.ingredients))
@@ -114,12 +115,14 @@ async def test_exclude_ingredients():
         # 제외 재료 검증
         exclude_set = set(payload.constraints.exclude)
         for recipe in response.recipes:
-            text_blob = " ".join([
-                recipe.title,
-                recipe.summary,
-                " ".join(recipe.ingredients_total),
-                " ".join(recipe.steps)
-            ])
+            text_blob = " ".join(
+                [
+                    recipe.title,
+                    recipe.summary,
+                    " ".join(recipe.ingredients_total),
+                    " ".join(recipe.steps),
+                ]
+            )
 
             for excluded in exclude_set:
                 if excluded in text_blob:
@@ -141,11 +144,7 @@ async def test_time_limit():
     print("=" * 60)
 
     payload = RecommendationCreate(
-        ingredients=["계란", "밥"],
-        constraints=Constraints(
-            time_limit_min=10,
-            servings=1
-        )
+        ingredients=["계란", "밥"], constraints=Constraints(time_limit_min=10, servings=1)
     )
 
     print("시간 제한:", payload.constraints.time_limit_min, "분")
@@ -156,7 +155,9 @@ async def test_time_limit():
 
         for recipe in response.recipes:
             if recipe.time_min > payload.constraints.time_limit_min:
-                print(f"❌ 시간 초과: {recipe.title} ({recipe.time_min}분 > {payload.constraints.time_limit_min}분)")
+                print(
+                    f"❌ 시간 초과: {recipe.title} ({recipe.time_min}분 > {payload.constraints.time_limit_min}분)"
+                )
                 return False
 
         print("✅ 시간 제한 검증 통과!")
@@ -169,7 +170,7 @@ async def test_time_limit():
 
 async def main():
     """메인 테스트 함수"""
-    print(f"\n현재 설정:")
+    print("\n현재 설정:")
     print(f"  LLM Provider: {settings.llm_provider}")
     print(f"  Model: {settings.llm_model}")
     print(f"  API Key: {'설정됨' if settings.anthropic_api_key else '미설정'}")
@@ -179,7 +180,9 @@ async def main():
     if settings.llm_provider == "anthropic" and not settings.anthropic_api_key:
         print("⚠️  ANTHROPIC_API_KEY가 설정되지 않았습니다.")
         print("    Mock 모드로 테스트하려면: LLM_PROVIDER=mock python test_llm_integration.py")
-        print("    실제 API 사용하려면: ANTHROPIC_API_KEY=sk-ant-... python test_llm_integration.py")
+        print(
+            "    실제 API 사용하려면: ANTHROPIC_API_KEY=sk-ant-... python test_llm_integration.py"
+        )
         sys.exit(1)
 
     # 테스트 실행

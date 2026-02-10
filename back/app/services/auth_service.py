@@ -19,8 +19,7 @@ from app.core.security import (
     get_password_hash,
     verify_password,
 )
-from app.models.user import User, UserCreate, UserLogin, UserResponse, TokenResponse
-
+from app.models.user import TokenResponse, User, UserCreate, UserLogin, UserResponse
 
 security = HTTPBearer(auto_error=False)
 
@@ -37,8 +36,7 @@ class AuthService:
         existing = self.db.query(User).filter(User.email == data.email).first()
         if existing:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="이미 등록된 이메일입니다."
+                status_code=status.HTTP_400_BAD_REQUEST, detail="이미 등록된 이메일입니다."
             )
 
         # 사용자 생성
@@ -51,10 +49,7 @@ class AuthService:
         self.db.refresh(user)
 
         return UserResponse(
-            id=str(user.id),
-            email=user.email,
-            nickname=user.nickname,
-            created_at=user.created_at
+            id=str(user.id), email=user.email, nickname=user.nickname, created_at=user.created_at
         )
 
     def login(self, data: UserLogin) -> TokenResponse:
@@ -64,7 +59,7 @@ class AuthService:
         if not user or not verify_password(data.password, user.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="이메일 또는 비밀번호가 올바르지 않습니다."
+                detail="이메일 또는 비밀번호가 올바르지 않습니다.",
             )
 
         # JWT 토큰 생성
@@ -83,34 +78,28 @@ def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ) -> User:
     """현재 로그인한 사용자 반환 (인증 필수)"""
     if not credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="인증이 필요합니다."
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="인증이 필요합니다.")
 
     payload = decode_access_token(credentials.credentials)
     if not payload:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="유효하지 않은 토큰입니다."
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="유효하지 않은 토큰입니다."
         )
 
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="토큰에 사용자 정보가 없습니다."
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="토큰에 사용자 정보가 없습니다."
         )
 
     user = db.query(User).filter(User.id == UUID(user_id)).first()
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="사용자를 찾을 수 없습니다."
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="사용자를 찾을 수 없습니다."
         )
 
     return user
@@ -118,7 +107,7 @@ async def get_current_user(
 
 async def get_current_user_optional(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ) -> User | None:
     """현재 로그인한 사용자 반환 (선택적 - 로그인 안 해도 됨)"""
     if not credentials:

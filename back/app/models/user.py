@@ -10,7 +10,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import Column, String, DateTime
+from sqlalchemy import Column, DateTime, String
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.database import Base
@@ -19,6 +19,7 @@ from app.core.database import Base
 # SQLAlchemy ORM 모델
 class User(Base):
     """사용자 DB 모델"""
+
     __tablename__ = "users"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -31,18 +32,21 @@ class User(Base):
 # Pydantic 스키마
 class UserCreate(BaseModel):
     """회원가입 요청 스키마"""
+
     email: EmailStr
     password: str = Field(..., min_length=6, description="최소 6자 이상")
 
 
 class UserLogin(BaseModel):
     """로그인 요청 스키마"""
+
     email: EmailStr
     password: str
 
 
 class UserResponse(BaseModel):
     """사용자 응답 스키마 (비밀번호 제외)"""
+
     id: str
     email: str
     nickname: str | None = None
@@ -53,5 +57,6 @@ class UserResponse(BaseModel):
 
 class TokenResponse(BaseModel):
     """JWT 토큰 응답 스키마"""
+
     access_token: str
     token_type: str = "bearer"

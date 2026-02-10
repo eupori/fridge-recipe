@@ -8,7 +8,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from pydantic import BaseModel
-from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, JSON
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -18,6 +18,7 @@ from app.core.database import Base
 # SQLAlchemy ORM 모델
 class SearchHistory(Base):
     """검색 기록 DB 모델"""
+
     __tablename__ = "search_histories"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -42,6 +43,7 @@ class SearchHistory(Base):
 # Pydantic 스키마
 class SearchHistoryCreate(BaseModel):
     """검색 기록 생성 (내부 사용)"""
+
     recommendation_id: str
     ingredients: list[str]
     time_limit_min: int
@@ -52,6 +54,7 @@ class SearchHistoryCreate(BaseModel):
 
 class SearchHistoryResponse(BaseModel):
     """검색 기록 응답"""
+
     id: str
     recommendation_id: str
     ingredients: list[str]
