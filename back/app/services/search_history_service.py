@@ -41,9 +41,7 @@ class SearchHistoryService:
         self.db.refresh(history)
         return history
 
-    def get_user_histories(
-        self, user_id: UUID, limit: int = 20
-    ) -> list[SearchHistoryResponse]:
+    def get_user_histories(self, user_id: UUID, limit: int = 20) -> list[SearchHistoryResponse]:
         """사용자의 최근 7일 검색 기록 조회"""
         seven_days_ago = datetime.utcnow() - timedelta(days=7)
 
@@ -74,15 +72,18 @@ class SearchHistoryService:
 
     def delete(self, user_id: UUID, history_id: UUID) -> None:
         """검색 기록 삭제"""
-        history = self.db.query(SearchHistory).filter(
-            SearchHistory.id == history_id,
-            SearchHistory.user_id == user_id,
-        ).first()
+        history = (
+            self.db.query(SearchHistory)
+            .filter(
+                SearchHistory.id == history_id,
+                SearchHistory.user_id == user_id,
+            )
+            .first()
+        )
 
         if not history:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="검색 기록을 찾을 수 없습니다."
+                status_code=status.HTTP_404_NOT_FOUND, detail="검색 기록을 찾을 수 없습니다."
             )
 
         self.db.delete(history)
@@ -91,9 +92,7 @@ class SearchHistoryService:
     def delete_all(self, user_id: UUID) -> int:
         """모든 검색 기록 삭제, 삭제된 개수 반환"""
         deleted_count = (
-            self.db.query(SearchHistory)
-            .filter(SearchHistory.user_id == user_id)
-            .delete()
+            self.db.query(SearchHistory).filter(SearchHistory.user_id == user_id).delete()
         )
         self.db.commit()
         return deleted_count

@@ -7,13 +7,14 @@ PostgreSQL 연결 (Supabase 또는 Neon 지원)
 """
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.core.config import settings
 
 
 class Base(DeclarativeBase):
     """SQLAlchemy 모델 기본 클래스"""
+
     pass
 
 

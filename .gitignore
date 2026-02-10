@@ -5,8 +5,11 @@ out/
 
 # Python
 .venv/
+fridge-recipe/
+back/fridge-recipe/
 __pycache__/
 *.pyc
+*.db
 
 # Env
 .env

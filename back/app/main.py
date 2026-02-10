@@ -3,9 +3,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import create_tables
-from app.api.v1.router import api_router
 
 
 @asynccontextmanager
@@ -53,7 +53,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=cors_origins or ["*"],
         allow_credentials=True,
-        allow_methods=["*"] ,
+        allow_methods=["*"],
         allow_headers=["*"],
     )
 
@@ -65,13 +65,9 @@ def create_app() -> FastAPI:
         responses={
             200: {
                 "description": "서버가 정상 작동 중",
-                "content": {
-                    "application/json": {
-                        "example": {"ok": True, "env": "dev"}
-                    }
-                }
+                "content": {"application/json": {"example": {"ok": True, "env": "dev"}}},
             }
-        }
+        },
     )
     def health():
         """

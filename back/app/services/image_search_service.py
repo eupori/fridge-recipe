@@ -24,7 +24,6 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, Optional
 from urllib.parse import quote
 
 import httpx
@@ -35,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 # 한국 음식 영어 번역 매핑 사전
 # 검색 정확도 향상을 위해 한국어 + 영어 + 문맥 키워드 조합
-KOREAN_FOOD_TRANSLATIONS: Dict[str, str] = {
+KOREAN_FOOD_TRANSLATIONS: dict[str, str] = {
     # 밥/면 요리
     "김치볶음밥": "kimchi fried rice korean food",
     "볶음밥": "fried rice korean",
@@ -48,7 +47,6 @@ KOREAN_FOOD_TRANSLATIONS: Dict[str, str] = {
     "칼국수": "kalguksu knife-cut noodles korean",
     "냉면": "naengmyeon cold noodles korean",
     "비빔국수": "bibim guksu spicy noodles korean",
-
     # 찌개/국
     "된장찌개": "doenjang jjigae soybean paste stew korean",
     "김치찌개": "kimchi jjigae stew korean",
@@ -58,7 +56,6 @@ KOREAN_FOOD_TRANSLATIONS: Dict[str, str] = {
     "미역국": "miyeok guk seaweed soup korean",
     "계란국": "gyeran guk egg soup korean",
     "콩나물국": "kongnamul guk bean sprout soup korean",
-
     # 고기 요리
     "불고기": "bulgogi korean bbq beef marinated",
     "제육볶음": "jeyuk bokkeum spicy pork stir-fry korean",
@@ -67,27 +64,22 @@ KOREAN_FOOD_TRANSLATIONS: Dict[str, str] = {
     "갈비": "galbi korean bbq ribs",
     "닭갈비": "dak galbi spicy chicken ribs korean",
     "돼지갈비": "dwaeji galbi pork ribs korean",
-
     # 계란 요리
     "계란말이": "gyeran mari rolled omelette korean",
     "계란찜": "gyeran jjim steamed egg korean",
     "계란후라이": "fried egg korean",
     "스크램블": "scrambled eggs",
-
     # 반찬
     "김치": "kimchi korean fermented cabbage",
     "나물": "namul seasoned vegetables korean",
     "시금치나물": "sigeumchi namul spinach korean",
     "콩나물무침": "kongnamul muchim bean sprout korean",
     "무생채": "mu saengchae radish salad korean",
-
     # 튀김/전
     "김치전": "kimchi jeon pancake korean",
     "파전": "pajeon green onion pancake korean",
     "해물파전": "haemul pajeon seafood pancake korean",
     "감자전": "gamja jeon potato pancake korean",
-    "계란말이": "gyeran mari egg roll korean",
-
     # 기타
     "떡볶이": "tteokbokki spicy rice cakes korean",
     "순대": "sundae korean blood sausage",
@@ -321,6 +313,7 @@ class GeminiImageGenerationAdapter(ImageSearchAdapter):
         if self._client is None:
             try:
                 from google import genai
+
                 self._client = genai.Client(api_key=self.api_key)
             except ImportError:
                 logger.error("google-genai 패키지가 설치되지 않았습니다. pip install google-genai")
@@ -376,7 +369,6 @@ garnished with fresh herbs, steam rising from the dish."""
             return None
 
         try:
-            from google import genai
             from google.genai import types
 
             client = self._get_client()
@@ -397,8 +389,8 @@ garnished with fresh herbs, steam rising from the dish."""
                         prompt=prompt,
                         config=types.GenerateImagesConfig(
                             number_of_images=1,
-                        )
-                    )
+                        ),
+                    ),
                 )
 
                 if response.generated_images and len(response.generated_images) > 0:
@@ -406,7 +398,9 @@ garnished with fresh herbs, steam rising from the dish."""
                     image_bytes = image.image_bytes
                     b64_data = base64.b64encode(image_bytes).decode("utf-8")
                     data_url = f"data:image/png;base64,{b64_data}"
-                    logger.info(f"Imagen 이미지 생성 성공: '{query}' (크기: {len(image_bytes)} bytes)")
+                    logger.info(
+                        f"Imagen 이미지 생성 성공: '{query}' (크기: {len(image_bytes)} bytes)"
+                    )
                     return data_url
             else:
                 # Gemini 이미지 생성 모델: generate_content 사용
@@ -415,10 +409,8 @@ garnished with fresh herbs, steam rising from the dish."""
                     lambda: client.models.generate_content(
                         model=self.model,
                         contents=prompt,
-                        config=types.GenerateContentConfig(
-                            response_modalities=["TEXT", "IMAGE"]
-                        )
-                    )
+                        config=types.GenerateContentConfig(response_modalities=["TEXT", "IMAGE"]),
+                    ),
                 )
 
                 if response.candidates and response.candidates[0].content.parts:
@@ -428,7 +420,9 @@ garnished with fresh herbs, steam rising from the dish."""
                             mime_type = part.inline_data.mime_type
                             b64_data = base64.b64encode(image_data).decode("utf-8")
                             data_url = f"data:{mime_type};base64,{b64_data}"
-                            logger.info(f"Gemini 이미지 생성 성공: '{query}' (크기: {len(image_data)} bytes)")
+                            logger.info(
+                                f"Gemini 이미지 생성 성공: '{query}' (크기: {len(image_data)} bytes)"
+                            )
                             return data_url
 
             logger.warning(f"Gemini 응답에 이미지 없음: '{query}'")
@@ -440,9 +434,11 @@ garnished with fresh herbs, steam rising from the dish."""
         except Exception as e:
             error_str = str(e)
             if "billed users" in error_str.lower():
-                logger.error(f"Gemini 이미지 생성: 유료 계정 필요 (Billing 활성화 필요)")
+                logger.error("Gemini 이미지 생성: 유료 계정 필요 (Billing 활성화 필요)")
             elif "quota" in error_str.lower() or "RESOURCE_EXHAUSTED" in error_str:
-                logger.error(f"Gemini 이미지 생성: 할당량 초과 (유료 플랜 업그레이드 또는 대기 필요)")
+                logger.error(
+                    "Gemini 이미지 생성: 할당량 초과 (유료 플랜 업그레이드 또는 대기 필요)"
+                )
             else:
                 logger.error(f"Gemini 이미지 생성 실패: {e}")
             return None
@@ -486,22 +482,24 @@ class ImageSearchService:
 
         # 파일 기반 영구 캐시 로드
         self.cache_enabled = settings.image_cache_enabled
-        self.cache: Dict[str, Optional[str]] = self._load_cache()
+        self.cache: dict[str, str | None] = self._load_cache()
 
-        logger.info(f"이미지 검색 서비스 초기화: provider={provider}, cache={self.cache_enabled}, 캐시 항목={len(self.cache)}")
+        logger.info(
+            f"이미지 검색 서비스 초기화: provider={provider}, cache={self.cache_enabled}, 캐시 항목={len(self.cache)}"
+        )
 
-    def _load_cache(self) -> Dict[str, Optional[str]]:
+    def _load_cache(self) -> dict[str, str | None]:
         """파일에서 캐시 로드"""
         if not self.cache_enabled:
             return {}
 
         try:
             if self.CACHE_FILE.exists():
-                with open(self.CACHE_FILE, "r", encoding="utf-8") as f:
+                with open(self.CACHE_FILE, encoding="utf-8") as f:
                     cache_data = json.load(f)
                     logger.info(f"캐시 파일 로드 완료: {len(cache_data)}개 항목")
                     return cache_data
-        except (json.JSONDecodeError, IOError) as e:
+        except (OSError, json.JSONDecodeError) as e:
             logger.warning(f"캐시 파일 로드 실패, 새로 시작: {e}")
 
         return {}
@@ -516,7 +514,7 @@ class ImageSearchService:
             with open(self.CACHE_FILE, "w", encoding="utf-8") as f:
                 json.dump(self.cache, f, ensure_ascii=False, indent=2)
             logger.debug(f"캐시 파일 저장 완료: {len(self.cache)}개 항목")
-        except IOError as e:
+        except OSError as e:
             logger.error(f"캐시 파일 저장 실패: {e}")
 
     async def get_image(self, recipe_title: str) -> str | None:
@@ -586,7 +584,7 @@ class ImageSearchService:
             try:
                 self.CACHE_FILE.unlink()
                 logger.info("이미지 검색 캐시 파일 삭제")
-            except IOError as e:
+            except OSError as e:
                 logger.error(f"캐시 파일 삭제 실패: {e}")
         logger.info("이미지 검색 캐시 초기화")
 
@@ -595,5 +593,5 @@ class ImageSearchService:
         return {
             "enabled": self.cache_enabled,
             "size": len(self.cache),
-            "entries": list(self.cache.keys())
+            "entries": list(self.cache.keys()),
         }

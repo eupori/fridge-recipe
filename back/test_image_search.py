@@ -25,9 +25,8 @@ from pathlib import Path
 # 프로젝트 루트를 sys.path에 추가
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.services.image_search_service import ImageSearchService
 from app.core.config import settings
-
+from app.services.image_search_service import ImageSearchService
 
 # 테스트용 한국 음식 목록
 TEST_RECIPES = [
@@ -41,9 +40,9 @@ TEST_RECIPES = [
 
 async def test_basic_search():
     """기본 이미지 검색 테스트"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("테스트 1: 기본 이미지 검색")
-    print("="*60)
+    print("=" * 60)
     print(f"Provider: {settings.image_search_provider}")
     print(f"Cache: {settings.image_cache_enabled}")
     print()
@@ -68,9 +67,9 @@ async def test_basic_search():
 
 async def test_cache_performance(service: ImageSearchService):
     """캐시 성능 테스트"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("테스트 2: 캐시 성능 테스트")
-    print("="*60)
+    print("=" * 60)
 
     if not settings.image_cache_enabled:
         print("⚠️ 캐시가 비활성화되어 있습니다. 테스트 건너뜀.")
@@ -109,9 +108,9 @@ async def test_cache_performance(service: ImageSearchService):
 
 async def test_parallel_search():
     """병렬 검색 성능 테스트"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("테스트 3: 병렬 검색 성능 (3개 레시피 동시)")
-    print("="*60)
+    print("=" * 60)
 
     service = ImageSearchService()
 
@@ -152,9 +151,9 @@ async def test_parallel_search():
 
 async def test_fallback():
     """폴백 동작 테스트"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("테스트 4: 폴백 동작 확인")
-    print("="*60)
+    print("=" * 60)
 
     # 존재하지 않는 음식명으로 테스트
     fake_recipe = "존재하지않는음식명12345xyz"
@@ -175,9 +174,9 @@ async def test_fallback():
 
 async def test_korean_translation():
     """한국어 번역 매핑 테스트"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("테스트 5: 한국어-영어 번역 매핑")
-    print("="*60)
+    print("=" * 60)
 
     from app.services.image_search_service import KOREAN_FOOD_TRANSLATIONS, GoogleImageSearchAdapter
 
@@ -202,11 +201,11 @@ async def test_korean_translation():
 
 async def main():
     """메인 테스트 실행"""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("🍳 Fridge-Recipe 이미지 검색 서비스 테스트")
-    print("="*70)
+    print("=" * 70)
 
-    print(f"\n환경 설정:")
+    print("\n환경 설정:")
     print(f"  IMAGE_SEARCH_PROVIDER: {settings.image_search_provider}")
     print(f"  IMAGE_CACHE_ENABLED: {settings.image_cache_enabled}")
     print(f"  IMAGE_SEARCH_TIMEOUT: {settings.image_search_timeout}초")
@@ -230,15 +229,16 @@ async def main():
         await test_fallback()
         await test_korean_translation()
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("✅ 모든 테스트 완료!")
-        print("="*70)
+        print("=" * 70)
 
     except KeyboardInterrupt:
         print("\n\n⚠️ 사용자가 테스트를 중단했습니다.")
     except Exception as e:
         print(f"\n\n❌ 테스트 실패: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 

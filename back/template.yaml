@@ -1,14 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Fridge-Recipe API - FastAPI on AWS Lambda
+Description: Fridge-Recipe API - FastAPI on AWS Lambda (Container)
 
 Globals:
   Function:
     Timeout: 60
     MemorySize: 512
-    Runtime: python3.11
-    Architectures:
-      - x86_64
 
 Parameters:
   AppEnv:
@@ -28,7 +25,7 @@ Parameters:
     NoEcho: true
   CorsOrigins:
     Type: String
-    Default: https://fridge-recipe.vercel.app
+    Default: "*"
     Description: Comma-separated allowed origins
   AnthropicApiKey:
     Type: String
@@ -57,8 +54,9 @@ Resources:
   FridgeRecipeFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: handler.handler
-      CodeUri: .
+      PackageType: Image
+      Architectures:
+        - arm64
       Description: Fridge-Recipe FastAPI backend
       Environment:
         Variables:
@@ -84,6 +82,10 @@ Resources:
             Method: ANY
       Policies:
         - AWSLambdaBasicExecutionRole
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: .
+      DockerTag: latest
 
 Outputs:
   ApiEndpoint:

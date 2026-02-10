@@ -40,18 +40,18 @@ router = APIRouter()
                                 "ingredients_need": ["참기름"],
                                 "steps": ["김치를 잘게 썬다", "팬에 기름을 두르고 김치를 볶는다"],
                                 "tips": [],
-                                "warnings": []
+                                "warnings": [],
                             }
                         ],
                         "shopping_list": [
                             {"item": "참기름", "qty": None, "unit": None, "category": None}
-                        ]
+                        ],
                     }
                 }
-            }
+            },
         },
         400: {"description": "잘못된 요청 (검증 실패)"},
-    }
+    },
 )
 async def post_recommendations(
     payload: RecommendationCreate,
@@ -77,7 +77,7 @@ async def post_recommendations(
     - 통합된 장보기 리스트 (중복 제거됨)
     """
     try:
-        response = await create_recommendation(payload)
+        response = await create_recommendation(payload, db)
 
         # 로그인 사용자의 경우 검색 기록 저장
         if current_user:
@@ -96,7 +96,7 @@ async def post_recommendations(
 
         return response
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get(
@@ -107,9 +107,12 @@ async def post_recommendations(
     responses={
         200: {"description": "레시피 추천 조회 성공"},
         404: {"description": "해당 ID의 추천을 찾을 수 없음"},
-    }
+    },
 )
-def get_recommendations(recommendation_id: str):
+def get_recommendations(
+    recommendation_id: str,
+    db: Session = Depends(get_db),
+):
     """
     ## 레시피 추천 조회
 
@@ -120,11 +123,8 @@ def get_recommendations(recommendation_id: str):
 
     ### 응답
     - 생성 시점의 전체 추천 데이터 (레시피 3개 + 장보기 리스트)
-
-    ### 주의사항
-    - 현재 인메모리 저장소를 사용하므로 서버 재시작 시 데이터가 손실될 수 있습니다.
     """
-    rec = get_recommendation(recommendation_id)
+    rec = get_recommendation(recommendation_id, db)
     if rec is None:
         raise HTTPException(status_code=404, detail="not_found")
     return rec
