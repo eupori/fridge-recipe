@@ -38,7 +38,12 @@ jobs:
 
       - name: Deploy SAM application
         run: |
-          sam deploy --no-confirm-changeset --no-fail-on-empty-changeset \
+          sam deploy \
+            --stack-name fridge-recipe-api \
+            --capabilities CAPABILITY_IAM \
+            --resolve-image-repos \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
             --parameter-overrides \
               DatabaseUrl="${{ secrets.DATABASE_URL }}" \
               JwtSecretKey="${{ secrets.JWT_SECRET_KEY }}" \
