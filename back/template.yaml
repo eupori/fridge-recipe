@@ -56,7 +56,7 @@ Resources:
     Properties:
       PackageType: Image
       Architectures:
-        - arm64
+        - x86_64
       Description: Fridge-Recipe FastAPI backend
       Environment:
         Variables:
