@@ -1,4 +1,4 @@
-FROM --platform=linux/arm64 public.ecr.aws/lambda/python:3.11
+FROM public.ecr.aws/lambda/python:3.11
 
 # Set working directory
 WORKDIR ${LAMBDA_TASK_ROOT}
