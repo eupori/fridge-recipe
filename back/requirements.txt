@@ -17,3 +17,5 @@ bcrypt
 email-validator
 # AWS Lambda
 mangum>=0.17.0
+# Development
+ruff
