@@ -1,5 +1,106 @@
 # AWS 배포 가이드: Lambda + Vercel + Supabase
 
+## CI/CD 자동 배포 플로우
+
+### 개요
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          CI/CD 파이프라인                                │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  [dev 브랜치]          [PR 생성]           [master 브랜치]               │
+│       │                   │                     │                       │
+│   개발 작업         린트 검사 실행          자동 배포 트리거             │
+│       │                   │                     │                       │
+│       ▼                   ▼                     ▼                       │
+│  git push          ┌───────────┐         ┌─────────────┐                │
+│                    │ lint.yml  │         │ 백엔드      │                │
+│                    ├───────────┤         │ (GitHub     │                │
+│                    │ ✓ Ruff    │         │  Actions)   │                │
+│                    │ ✓ ESLint  │         └──────┬──────┘                │
+│                    └─────┬─────┘                │                       │
+│                          │                      ▼                       │
+│                    통과해야              AWS Lambda                      │
+│                    병합 가능             (SAM Deploy)                    │
+│                                                                         │
+│                                         ┌─────────────┐                │
+│                                         │ 프론트엔드   │                │
+│                                         │ (Vercel)    │                │
+│                                         └──────┬──────┘                │
+│                                                │                       │
+│                                                ▼                       │
+│                                          Vercel Edge                   │
+│                                          (자동 감지)                    │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### 브랜치 전략
+
+| 브랜치 | 용도 | 배포 여부 |
+|--------|------|----------|
+| `dev` | 개발 작업 | 없음 |
+| `master` | 프로덕션 | 자동 배포 |
+
+### 워크플로우 파일
+
+| 파일 | 트리거 | 동작 |
+|------|--------|------|
+| `.github/workflows/lint.yml` | PR → master | Ruff + ESLint 검사 |
+| `.github/workflows/deploy-backend.yml` | push → master + `back/**` 변경 | AWS Lambda 배포 |
+
+### 배포 순서
+
+```bash
+# 1. dev 브랜치에서 개발
+git checkout dev
+git add . && git commit -m "feat: 새 기능"
+git push origin dev
+
+# 2. PR 생성 (GitHub에서)
+# → 린트 검사 자동 실행
+# → 통과해야 병합 가능
+
+# 3. PR 병합
+# → 백엔드: GitHub Actions가 AWS Lambda 배포
+# → 프론트엔드: Vercel이 자동 감지하여 배포
+
+# 4. 배포 확인
+# - GitHub Actions 탭에서 배포 상태 확인
+# - Vercel Dashboard에서 배포 상태 확인
+```
+
+### GitHub Secrets 설정
+
+GitHub 레포 → Settings → Secrets and variables → Actions
+
+| Secret | 설명 |
+|--------|------|
+| `AWS_ACCESS_KEY_ID` | AWS IAM 액세스 키 |
+| `AWS_SECRET_ACCESS_KEY` | AWS IAM 시크릿 키 |
+| `DATABASE_URL` | Supabase PostgreSQL 연결 문자열 |
+| `JWT_SECRET_KEY` | JWT 서명 키 |
+| `CORS_ORIGINS` | 허용된 프론트엔드 도메인 |
+| `ANTHROPIC_API_KEY` | Claude API 키 |
+| `GEMINI_API_KEY` | Gemini 이미지 생성 API 키 |
+
+### 로컬 린트 실행
+
+```bash
+# 백엔드 (PR 전에 확인)
+cd back
+ruff check .        # 린트 검사
+ruff format .       # 자동 포맷팅
+
+# 프론트엔드
+cd front
+npm run lint        # 린트 검사
+npm run lint -- --fix  # 자동 수정
+```
+
+---
+
 ## 아키텍처
 
 ```
