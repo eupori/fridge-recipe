@@ -127,3 +127,4 @@ Outputs:
     Condition: HasCustomDomain
     Description: CNAME target for custom domain
     Value: !GetAtt CustomDomain.RegionalDomainName
+# Trigger deploy
