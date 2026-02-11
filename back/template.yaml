@@ -49,6 +49,17 @@ Parameters:
       - gemini
       - unsplash
       - mock
+  DomainName:
+    Type: String
+    Default: ""
+    Description: Custom domain name (e.g., api.recipe.eupori.dev)
+  CertificateArn:
+    Type: String
+    Default: ""
+    Description: ACM certificate ARN (must be in us-east-1)
+
+Conditions:
+  HasCustomDomain: !Not [!Equals [!Ref DomainName, ""]]
 
 Resources:
   FridgeRecipeFunction:
@@ -87,6 +98,24 @@ Resources:
       DockerContext: .
       DockerTag: latest
 
+  CustomDomain:
+    Type: AWS::ApiGatewayV2::DomainName
+    Condition: HasCustomDomain
+    Properties:
+      DomainName: !Ref DomainName
+      DomainNameConfigurations:
+        - EndpointType: REGIONAL
+          CertificateArn: !Ref CertificateArn
+
+  ApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Condition: HasCustomDomain
+    DependsOn: CustomDomain
+    Properties:
+      DomainName: !Ref DomainName
+      ApiId: !Ref ServerlessHttpApi
+      Stage: $default
+
 Outputs:
   ApiEndpoint:
     Description: API Gateway endpoint URL
@@ -94,3 +123,7 @@ Outputs:
   FunctionArn:
     Description: Lambda function ARN
     Value: !GetAtt FridgeRecipeFunction.Arn
+  CustomDomainTarget:
+    Condition: HasCustomDomain
+    Description: CNAME target for custom domain
+    Value: !GetAtt CustomDomain.RegionalDomainName

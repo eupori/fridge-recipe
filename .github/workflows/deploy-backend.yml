@@ -50,4 +50,6 @@ jobs:
               JwtSecretKey="${{ secrets.JWT_SECRET_KEY }}" \
               CorsOrigins="${{ secrets.CORS_ORIGINS }}" \
               AnthropicApiKey="${{ secrets.ANTHROPIC_API_KEY }}" \
-              GeminiApiKey="${{ secrets.GEMINI_API_KEY }}"
+              GeminiApiKey="${{ secrets.GEMINI_API_KEY }}" \
+              DomainName="${{ secrets.DOMAIN_NAME }}" \
+              CertificateArn="${{ secrets.CERTIFICATE_ARN }}"
