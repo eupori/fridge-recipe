@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -149,6 +150,7 @@ async def create_recommendation(
         ValueError: 검증 실패 시
     """
     logger.info(f"레시피 생성 요청: 재료={payload.ingredients}, 제약={payload.constraints}")
+    start_time = time.monotonic()
 
     # 1. LLM 어댑터 선택 (mock 또는 실제)
     if settings.llm_provider == "mock":
@@ -158,14 +160,24 @@ async def create_recommendation(
 
     # 2. LLM으로 레시피 생성 (ingredients_total만 포함)
     recipes_raw = llm_adapter.generate_recipes(payload)
+    llm_elapsed = time.monotonic() - start_time
+    logger.info(f"LLM 생성 완료: {llm_elapsed:.1f}초")
 
     # 3. 이미지 검색 서비스 초기화
     image_service = ImageSearchService()
 
-    # 4. 이미지 병렬 검색 (3개 레시피 동시 처리)
-    logger.info(f"이미지 검색 시작: {len(recipes_raw)}개 레시피")
+    # 4. 이미지 병렬 검색 (API Gateway 30초 제한 대비 동적 타임아웃)
+    image_timeout = max(25 - llm_elapsed, 3)
+    logger.info(f"이미지 검색 시작: {len(recipes_raw)}개 레시피 (타임아웃: {image_timeout:.1f}초)")
     image_tasks = [image_service.get_image(recipe.title) for recipe in recipes_raw]
-    image_results = await asyncio.gather(*image_tasks, return_exceptions=True)
+    try:
+        image_results = await asyncio.wait_for(
+            asyncio.gather(*image_tasks, return_exceptions=True),
+            timeout=image_timeout,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(f"이미지 생성 타임아웃 ({image_timeout:.1f}초 초과), 이미지 없이 진행")
+        image_results = [None] * len(recipes_raw)
 
     # 5. ingredients_have, ingredients_need 분리 + 이미지 URL 추가
     final_recipes = []
