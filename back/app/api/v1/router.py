@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.favorites import router as favorites_router
+from app.api.v1.endpoints.images import router as images_router
 from app.api.v1.endpoints.recommendations import router as recommendations_router
 from app.api.v1.endpoints.search_histories import router as search_histories_router
 
@@ -14,3 +15,4 @@ api_router.include_router(favorites_router, prefix="/favorites", tags=["favorite
 api_router.include_router(
     search_histories_router, prefix="/search-histories", tags=["search-histories"]
 )
+api_router.include_router(images_router, prefix="/images", tags=["images"])

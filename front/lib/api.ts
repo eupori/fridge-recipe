@@ -261,6 +261,19 @@ export async function deleteSearchHistory(id: string): Promise<void> {
   }
 }
 
+// Image API
+export async function getRecipeImage(title: string): Promise<string | null> {
+  try {
+    const params = new URLSearchParams({ title });
+    const res = await fetch(`${API_BASE}/images/generate?${params}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.image_url ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function clearAllSearchHistories(): Promise<{ deleted_count: number }> {
   const res = await fetch(`${API_BASE}/search-histories/all`, {
     method: "DELETE",

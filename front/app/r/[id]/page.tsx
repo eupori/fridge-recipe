@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getRecommendation, addFavorite, getRecipeLikeStats, RecommendationLikeStats } from "../../../lib/api";
+import { getRecommendation, addFavorite, getRecipeLikeStats, getRecipeImage, RecommendationLikeStats } from "../../../lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,8 @@ export default function ResultPage({ params }: { params: { id: string } }) {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const [likeStats, setLikeStats] = useState<RecommendationLikeStats | null>(null);
   const [pantryItems, setPantryItems] = useState<string[]>([]);
+  const [recipeImages, setRecipeImages] = useState<(string | null)[]>([]);
+  const [imageLoading, setImageLoading] = useState<boolean[]>([]);
   const { user } = useAuth();
 
   // 보유 재료 로드
@@ -62,6 +64,40 @@ export default function ResultPage({ params }: { params: { id: string } }) {
       }
     })();
   }, [params.id]);
+
+  // 이미지가 없는 레시피에 대해 비동기로 이미지 로드
+  useEffect(() => {
+    if (!data?.recipes) return;
+
+    const recipes = data.recipes as any[];
+    // 초기 이미지 상태 설정 (기존 image_url 사용)
+    setRecipeImages(recipes.map((r: any) => r.image_url ?? null));
+
+    // 이미지가 없는 레시피 인덱스 찾기
+    const missingIndices = recipes
+      .map((r: any, i: number) => (!r.image_url ? i : -1))
+      .filter((i) => i !== -1);
+
+    if (missingIndices.length === 0) return;
+
+    // 로딩 상태 설정
+    setImageLoading(recipes.map((_, i) => missingIndices.includes(i)));
+
+    // 병렬로 이미지 생성 요청
+    missingIndices.forEach(async (idx) => {
+      const imageUrl = await getRecipeImage(recipes[idx].title);
+      setRecipeImages((prev) => {
+        const next = [...prev];
+        next[idx] = imageUrl;
+        return next;
+      });
+      setImageLoading((prev) => {
+        const next = [...prev];
+        next[idx] = false;
+        return next;
+      });
+    });
+  }, [data]);
 
   // 로그인 후 pendingFavorite 자동 처리
   // 별도의 state로 처리 완료 여부 추적하여 FavoriteButton과 동기화
@@ -193,15 +229,35 @@ export default function ResultPage({ params }: { params: { id: string } }) {
               {/* 메인 영역: 이미지 + 핵심 정보 (가로 배치) */}
               <div className="flex">
                 {/* 좌측: 이미지 */}
-                {r.image_url && (
-                  <div className="w-32 h-32 md:w-40 md:h-40 shrink-0 bg-muted">
-                    <img
-                      src={r.image_url}
-                      alt={r.title}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                )}
+                {(() => {
+                  const imageUrl = recipeImages[idx];
+                  const isLoading = imageLoading[idx];
+
+                  if (imageUrl) {
+                    return (
+                      <div className="w-32 h-32 md:w-40 md:h-40 shrink-0 bg-muted">
+                        <img
+                          src={imageUrl}
+                          alt={r.title}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    );
+                  }
+
+                  if (isLoading) {
+                    return (
+                      <div className="w-32 h-32 md:w-40 md:h-40 shrink-0 bg-muted overflow-hidden relative">
+                        <div className="absolute inset-0 bg-gradient-to-r from-muted via-muted-foreground/10 to-muted animate-shimmer" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <ChefHat className="w-8 h-8 text-muted-foreground/30" />
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return null;
+                })()}
 
                 {/* 우측: 핵심 정보 */}
                 <div className="flex-1 p-4 flex flex-col justify-between">
