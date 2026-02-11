@@ -9,7 +9,7 @@ google-genai>=1.0.0
 pillow>=10.0.0
 # Database
 sqlalchemy>=2.0
-psycopg[binary]
+psycopg2-binary
 alembic
 # Authentication
 python-jose[cryptography]
