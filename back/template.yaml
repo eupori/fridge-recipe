@@ -43,7 +43,7 @@ Parameters:
       - mock
   ImageSearchProvider:
     Type: String
-    Default: mock
+    Default: gemini
     AllowedValues:
       - google
       - gemini

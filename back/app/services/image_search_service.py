@@ -354,9 +354,53 @@ garnished with fresh herbs, steam rising from the dish."""
 
         return prompt
 
+    def _compress_image(self, image_bytes: bytes, max_size: int = 100000) -> tuple[bytes, str]:
+        """
+        이미지를 JPEG로 압축하여 크기 줄이기
+
+        Args:
+            image_bytes: 원본 이미지 바이트
+            max_size: 최대 바이트 크기 (기본 100KB)
+
+        Returns:
+            (압축된 이미지 바이트, mime_type)
+        """
+        from io import BytesIO
+
+        from PIL import Image
+
+        # 이미지 로드
+        img = Image.open(BytesIO(image_bytes))
+
+        # RGBA → RGB 변환 (JPEG는 알파 채널 미지원)
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+
+        # 리사이즈 (최대 400x400)
+        max_dim = 400
+        if img.width > max_dim or img.height > max_dim:
+            img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+
+        # JPEG 압축 (퀄리티 조절)
+        quality = 70
+        while quality >= 30:
+            buffer = BytesIO()
+            img.save(buffer, format="JPEG", quality=quality, optimize=True)
+            compressed = buffer.getvalue()
+
+            if len(compressed) <= max_size:
+                logger.info(f"이미지 압축: {len(image_bytes)} → {len(compressed)} bytes (quality={quality})")
+                return compressed, "image/jpeg"
+
+            quality -= 10
+
+        # 최소 퀄리티로도 크면 그냥 반환
+        logger.warning(f"이미지 압축 한계: {len(compressed)} bytes")
+        return compressed, "image/jpeg"
+
     async def search_image(self, query: str) -> str | None:
         """
-        이미지 생성 후 base64 data URL 반환
+        이미지 생성 후 압축된 base64 data URL 반환
 
         Args:
             query: 레시피 제목 (검색이 아닌 생성용으로 사용)
@@ -396,10 +440,12 @@ garnished with fresh herbs, steam rising from the dish."""
                 if response.generated_images and len(response.generated_images) > 0:
                     image = response.generated_images[0].image
                     image_bytes = image.image_bytes
-                    b64_data = base64.b64encode(image_bytes).decode("utf-8")
-                    data_url = f"data:image/png;base64,{b64_data}"
+                    # 압축 적용
+                    compressed_bytes, mime_type = self._compress_image(image_bytes)
+                    b64_data = base64.b64encode(compressed_bytes).decode("utf-8")
+                    data_url = f"data:{mime_type};base64,{b64_data}"
                     logger.info(
-                        f"Imagen 이미지 생성 성공: '{query}' (크기: {len(image_bytes)} bytes)"
+                        f"Imagen 이미지 생성 성공: '{query}' (압축 후: {len(compressed_bytes)} bytes)"
                     )
                     return data_url
             else:
@@ -417,11 +463,12 @@ garnished with fresh herbs, steam rising from the dish."""
                     for part in response.candidates[0].content.parts:
                         if part.inline_data and part.inline_data.mime_type.startswith("image/"):
                             image_data = part.inline_data.data
-                            mime_type = part.inline_data.mime_type
-                            b64_data = base64.b64encode(image_data).decode("utf-8")
+                            # 압축 적용
+                            compressed_bytes, mime_type = self._compress_image(image_data)
+                            b64_data = base64.b64encode(compressed_bytes).decode("utf-8")
                             data_url = f"data:{mime_type};base64,{b64_data}"
                             logger.info(
-                                f"Gemini 이미지 생성 성공: '{query}' (크기: {len(image_data)} bytes)"
+                                f"Gemini 이미지 생성 성공: '{query}' (압축 후: {len(compressed_bytes)} bytes)"
                             )
                             return data_url
 
