@@ -3,8 +3,9 @@ Favorites API endpoints
 
 - POST /favorites - 즐겨찾기 추가
 - GET /favorites - 내 즐겨찾기 목록
-- DELETE /favorites/{id} - 즐겨찾기 삭제
 - GET /favorites/check - 즐겨찾기 여부 확인
+- GET /favorites/stats/{id} - 좋아요 통계
+- DELETE /favorites/{id} - 즐겨찾기 삭제
 """
 
 from uuid import UUID
@@ -51,21 +52,6 @@ def get_favorites(
     return favorite_service.get_user_favorites(current_user.id)
 
 
-@router.delete("/{favorite_id}")
-def remove_favorite(
-    favorite_id: UUID,
-    current_user: User = Depends(get_current_user),
-    favorite_service: FavoriteService = Depends(get_favorite_service),
-):
-    """
-    즐겨찾기 삭제
-
-    인증 필요: Authorization: Bearer {token}
-    """
-    favorite_service.remove_favorite(current_user.id, favorite_id)
-    return {"ok": True}
-
-
 @router.get("/check", response_model=FavoriteCheck)
 def check_favorite(
     recommendation_id: str = Query(...),
@@ -91,3 +77,18 @@ def get_like_stats(
     인증 불필요 - 누구나 조회 가능
     """
     return favorite_service.get_recommendation_like_stats(recommendation_id)
+
+
+@router.delete("/{favorite_id}")
+def remove_favorite(
+    favorite_id: UUID,
+    current_user: User = Depends(get_current_user),
+    favorite_service: FavoriteService = Depends(get_favorite_service),
+):
+    """
+    즐겨찾기 삭제
+
+    인증 필요: Authorization: Bearer {token}
+    """
+    favorite_service.remove_favorite(current_user.id, favorite_id)
+    return {"ok": True}
