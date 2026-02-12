@@ -1,4 +1,4 @@
-# STATUS — 현재까지 진행 상황 (2026-02-09)
+# STATUS — 현재까지 진행 상황 (2026-02-12)
 
 ## ✅ 현재 동작 확인
 - Backend(FastAPI): 실행 및 `/health` 응답 확인
@@ -29,7 +29,14 @@
 - `front/lib/api.ts`: API 호출
 - `front/hooks/usePersistedState.ts`: localStorage 기반 상태 유지
 
-## ✅ 최근 완료된 이슈 (2026-02-09)
+## ✅ 최근 완료된 이슈 (2026-02-12)
+1. **풀스크린 로딩 오버레이** - 진행 단계 표시 + 요리 팁 애니메이션
+2. **Google 애드센스 설정** - ads.txt, 메타태그, 스크립트 삽입
+3. **도메인 설정** - `eupori.dev` + `recipe.eupori.dev` 모두 Vercel 연결
+4. **robots.txt 추가** - 크롤러 접근 허용
+5. **.gitignore 정리** - 빌드 캐시, 설정 파일 제외
+
+## ✅ 이전 완료 이슈 (2026-02-09)
 1. 새로고침 후 재료값 유지 (`usePersistedState` 훅)
 2. 로딩 UI 개선 (스피너, 폼 비활성화, 상태 메시지)
 3. 로그인 후 원래 페이지로 리다이렉트 (`returnUrl` 처리)

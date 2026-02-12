@@ -48,9 +48,11 @@
 - [ ] 이상한 레시피(30분/오븐 등) 차단 룰 보강
 
 ## 6. 배포
-- [ ] Render에 FastAPI 배포
-- [ ] Vercel에 Next.js 배포
-- [ ] CORS/ENV 점검
+- [x] AWS Lambda에 FastAPI 배포 (SAM + Docker)
+- [x] Vercel에 Next.js 배포
+- [x] 도메인 설정 (`eupori.dev`, `recipe.eupori.dev`, `recipe-api.eupori.dev`)
+- [x] GitHub Actions 자동배포 (백엔드, `back/**` 변경 시)
+- [x] CORS/ENV 점검
 - [ ] 로그/모니터링 확인
 
 ## 7. 기능 이슈 트래킹
@@ -71,6 +73,13 @@
 - [x] 이슈 10: 장보기 목록에서 보유재료로 바로 추가 기능
 - [x] 이슈 11: 즐겨찾기 중복 등록 버그 수정 + not_found 에러 안내 개선
 
+### ✅ 완료 (3건) - 2026-02-12 추가
+- [x] 이슈 12: 풀스크린 로딩 오버레이 (진행 단계 + 요리 팁)
+- [x] 이슈 13: Google 애드센스 설정 (ads.txt, 스크립트, 도메인)
+- [x] 이슈 14: 도메인 설정 정리 (`eupori.dev` + `recipe.eupori.dev`)
+
 ### 📋 남은 이슈
-- [ ] 이슈 12: PostgreSQL 마이그레이션 (배포 시)
-- [ ] 이슈 13: 추천 데이터 DB 저장 (서버 재시작 시 데이터 유지)
+- [ ] 이슈 15: PostgreSQL 마이그레이션 (배포 시)
+- [ ] 이슈 16: 추천 데이터 DB 저장 (서버 재시작 시 데이터 유지)
+- [ ] 이슈 17: 프론트엔드 자동배포 (Vercel GitHub 연동 또는 GitHub Actions)
+- [ ] 이슈 18: `eupori.dev` 랜딩페이지 개발 시 도메인 분리
