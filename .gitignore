@@ -26,3 +26,15 @@ samconfig.toml
 # Serverless Framework
 .serverless/
 node_modules/
+
+# Claude Code
+.claude/
+
+# Python version
+.python-version
+
+# SAM parameters (may contain secrets)
+back/params.json
+
+# Build cache
+front/tsconfig.tsbuildinfo
