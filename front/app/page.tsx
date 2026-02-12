@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { Suspense, useMemo, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import { createRecommendation, getSearchHistories, SearchHistoryResponse } from "../lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { usePersistedState } from "@/hooks/usePersistedState";
@@ -12,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChefHat, Clock, Users, Utensils, Loader2, Package, History, RefreshCw, ChevronRight, User } from "lucide-react";
+import RecipeLoadingOverlay from "@/components/RecipeLoadingOverlay";
 
 function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString);
@@ -34,7 +36,46 @@ function formatRelativeTime(dateString: string): string {
 }
 
 export default function HomePage() {
+  return (
+    <Suspense fallback={<HomePageLoading />}>
+      <HomePageContent />
+    </Suspense>
+  );
+}
+
+function HomePageLoading() {
+  return (
+    <main className="container max-w-3xl mx-auto py-10 px-4">
+      <div className="text-center mb-8">
+        <div className="flex items-center justify-center gap-2 mb-4">
+          <ChefHat className="w-10 h-10" />
+          <h1 className="text-4xl font-bold">오늘의 냉장고 레시피</h1>
+        </div>
+        <p className="text-muted-foreground text-lg">
+          재료를 입력하면 15분 내 가능한 레시피 3개와 장보기 리스트를 만들어줘요
+        </p>
+      </div>
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle>재료 입력</CardTitle>
+          <CardDescription>냉장고에 있는 재료를 알려주세요</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="animate-pulse space-y-4">
+            <div className="h-32 bg-muted rounded" />
+            <div className="h-10 bg-muted rounded" />
+            <div className="h-12 bg-muted rounded" />
+          </div>
+        </CardContent>
+      </Card>
+    </main>
+  );
+}
+
+function HomePageContent() {
   const { user, loading: authLoading } = useAuth();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [ingredientsText, setIngredientsText] = usePersistedState("recipe-ingredients", "계란, 김치, 양파");
   const [excludeText, setExcludeText] = usePersistedState("recipe-exclude", "");
   const [timeLimit, setTimeLimit] = usePersistedState("recipe-time-limit", 15);
@@ -84,11 +125,31 @@ export default function HomePage() {
     setIngredientsText(combined.join(", "));
   };
 
-  // 검색 기록에서 재료 불러오기 (다시 검색)
-  const loadFromHistory = (history: SearchHistoryResponse) => {
+  // 검색 기록에서 재료 불러오기 (다시 검색) - 바로 검색 실행
+  const loadFromHistory = async (history: SearchHistoryResponse) => {
+    // 폼 상태 업데이트 (UI 반영용)
     setIngredientsText(history.ingredients.join(", "));
     setTimeLimit(history.time_limit_min);
     setServings(history.servings);
+
+    // 바로 검색 실행 (history 값 직접 사용)
+    setError(null);
+    setLoading(true);
+    try {
+      const rec = await createRecommendation({
+        ingredients: history.ingredients,
+        constraints: {
+          time_limit_min: history.time_limit_min,
+          servings: history.servings,
+          tools,
+          exclude: [],
+        },
+      });
+      window.location.href = `/r/${rec.id}`;
+    } catch (e: any) {
+      setError(e?.message ?? "요청에 실패했습니다");
+      setLoading(false);
+    }
   };
 
   const ingredients = useMemo(() => {
@@ -98,7 +159,8 @@ export default function HomePage() {
       .filter(Boolean);
   }, [ingredientsText]);
 
-  async function onSubmit() {
+  // onSubmit을 useCallback으로 정의하여 autoSearch useEffect에서 사용
+  const onSubmit = useCallback(async () => {
     setError(null);
     setLoading(true);
     try {
@@ -123,14 +185,37 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [excludeText, ingredients, timeLimit, servings, tools]);
+
+  // autoSearch 파라미터가 있으면 자동으로 검색 실행
+  useEffect(() => {
+    const autoSearch = searchParams.get("autoSearch");
+    if (autoSearch === "true" && ingredients.length > 0 && !loading) {
+      // URL에서 파라미터 제거
+      router.replace("/", { scroll: false });
+      // 검색 실행
+      onSubmit();
+    }
+  }, [searchParams, ingredients, loading, router, onSubmit]);
 
   function toggleTool(t: string) {
-    setTools((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+    setTools((prev) => {
+      // "상관없음" 클릭 시 → 다른 모든 도구 해제하고 "상관없음"만 선택
+      if (t === "상관없음") {
+        return prev.includes("상관없음") ? [] : ["상관없음"];
+      }
+      // 다른 도구 클릭 시 → "상관없음" 해제
+      const withoutAny = prev.filter((x) => x !== "상관없음");
+      if (withoutAny.includes(t)) {
+        return withoutAny.filter((x) => x !== t);
+      }
+      return [...withoutAny, t];
+    });
   }
 
   return (
     <main className="container max-w-3xl mx-auto py-10 px-4">
+      <RecipeLoadingOverlay loading={loading} />
       <div className="text-center mb-8">
         <div className="flex items-center justify-center gap-2 mb-4">
           <ChefHat className="w-10 h-10" />
@@ -220,7 +305,7 @@ export default function HomePage() {
               조리도구
             </Label>
             <div className="flex gap-2 flex-wrap">
-              {["프라이팬", "전자레인지", "에어프라이어"].map((t) => (
+              {["프라이팬", "전자레인지", "에어프라이어", "냄비", "오븐", "상관없음"].map((t) => (
                 <Button
                   key={t}
                   type="button"
