@@ -85,7 +85,7 @@ export default function RecipeLoadingOverlay({ loading }: { loading: boolean }) 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-      <div className="flex flex-col items-center gap-6 px-6 max-w-sm text-center">
+      <div className="flex flex-col items-center gap-6 px-6 w-full max-w-sm text-center">
         {/* Animated icon */}
         <ChefHat className="w-14 h-14 text-primary animate-bounce" />
 

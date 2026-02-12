@@ -89,11 +89,11 @@ export default function HistoryPage() {
   };
 
   const handleSearchAgain = (history: SearchHistoryResponse) => {
-    // 재료를 localStorage에 저장하고 메인 페이지로 이동
+    // 재료를 localStorage에 저장하고 메인 페이지로 이동 (자동 검색 트리거)
     localStorage.setItem("recipe-ingredients", JSON.stringify(history.ingredients.join(", ")));
     localStorage.setItem("recipe-time-limit", JSON.stringify(history.time_limit_min));
     localStorage.setItem("recipe-servings", JSON.stringify(history.servings));
-    router.push("/");
+    router.push("/?autoSearch=true");
   };
 
   if (authLoading || loading) {

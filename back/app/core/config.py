@@ -16,12 +16,23 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expiration_minutes: int = 1440  # 24 hours
 
+    # Recipe Provider (youtube | anthropic | mock)
+    recipe_provider: str = "youtube"
+
     # LLM
     llm_provider: str = "anthropic"
     anthropic_api_key: str | None = None
     llm_model: str = "claude-sonnet-4-5-20250929"
     llm_temperature: float = 0.7
     llm_max_tokens: int = 4000
+
+    # YouTube Data API v3
+    youtube_api_key: str | None = None
+
+    # Haiku (YouTube 영상 구조화용)
+    haiku_model: str = "claude-haiku-4-5-20251001"
+    haiku_max_tokens: int = 3000
+    haiku_temperature: float = 0.3
 
     # Coupang
     coupang_partners_tracking_id: str | None = None

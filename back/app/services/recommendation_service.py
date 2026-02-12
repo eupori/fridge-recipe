@@ -20,6 +20,7 @@ from app.models.recommendation import (
 from app.services.image_search_service import ImageSearchService
 from app.services.llm_adapter import MockRecipeLLMAdapter, RecipeLLMAdapter
 from app.services.validation import validate_response
+from app.services.youtube_adapter import YouTubeRecipeAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -152,22 +153,34 @@ async def create_recommendation(
     logger.info(f"레시피 생성 요청: 재료={payload.ingredients}, 제약={payload.constraints}")
     start_time = time.monotonic()
 
-    # 1. LLM 어댑터 선택 (mock 또는 실제)
-    if settings.llm_provider == "mock":
-        llm_adapter = MockRecipeLLMAdapter()
-    else:
-        llm_adapter = RecipeLLMAdapter()
+    # 1. 레시피 생성 어댑터 선택 (youtube → anthropic → mock)
+    provider = settings.recipe_provider
+    logger.info(f"레시피 Provider: {provider}")
 
-    # 2. LLM으로 레시피 생성 (ingredients_total만 포함)
-    recipes_raw = llm_adapter.generate_recipes(payload)
+    if provider == "mock":
+        recipes_raw = MockRecipeLLMAdapter().generate_recipes(payload)
+    elif provider == "youtube":
+        try:
+            recipes_raw = await YouTubeRecipeAdapter().generate_recipes(payload)
+        except Exception as e:
+            logger.warning(f"YouTube+Haiku 실패, Sonnet 폴백: {e}")
+            try:
+                recipes_raw = RecipeLLMAdapter().generate_recipes(payload)
+            except Exception as e2:
+                logger.error(f"Sonnet 폴백도 실패, 더미 레시피 반환: {e2}")
+                recipes_raw = MockRecipeLLMAdapter().generate_recipes(payload)
+    else:
+        # anthropic (기존 동작)
+        recipes_raw = RecipeLLMAdapter().generate_recipes(payload)
+
     llm_elapsed = time.monotonic() - start_time
-    logger.info(f"LLM 생성 완료: {llm_elapsed:.1f}초")
+    logger.info(f"레시피 생성 완료: {llm_elapsed:.1f}초 (provider={provider})")
 
     # 3. 이미지 검색 서비스 초기화
     image_service = ImageSearchService()
 
     # 4. 이미지 병렬 검색 (API Gateway 30초 제한 대비 동적 타임아웃)
-    image_timeout = max(25 - llm_elapsed, 3)
+    image_timeout = max(28 - llm_elapsed, 5)
     logger.info(f"이미지 검색 시작: {len(recipes_raw)}개 레시피 (타임아웃: {image_timeout:.1f}초)")
     image_tasks = [image_service.get_image(recipe.title) for recipe in recipes_raw]
     try:

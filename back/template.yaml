@@ -35,6 +35,18 @@ Parameters:
     Type: String
     Description: Google Gemini API key for image generation
     NoEcho: true
+  RecipeProvider:
+    Type: String
+    Default: youtube
+    AllowedValues:
+      - youtube
+      - anthropic
+      - mock
+  YouTubeApiKey:
+    Type: String
+    Default: ""
+    Description: YouTube Data API v3 key
+    NoEcho: true
   LlmProvider:
     Type: String
     Default: anthropic
@@ -77,9 +89,11 @@ Resources:
           CORS_ORIGINS: !Ref CorsOrigins
           ANTHROPIC_API_KEY: !Ref AnthropicApiKey
           GEMINI_API_KEY: !Ref GeminiApiKey
+          RECIPE_PROVIDER: !Ref RecipeProvider
+          YOUTUBE_API_KEY: !Ref YouTubeApiKey
           LLM_PROVIDER: !Ref LlmProvider
           IMAGE_SEARCH_PROVIDER: !Ref ImageSearchProvider
-          IMAGE_CACHE_ENABLED: "false"
+          IMAGE_CACHE_ENABLED: "true"
       Events:
         ApiRoot:
           Type: HttpApi

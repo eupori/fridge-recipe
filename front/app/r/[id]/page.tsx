@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getRecommendation, addFavorite, getRecipeLikeStats, getRecipeImage, RecommendationLikeStats } from "../../../lib/api";
+import { getRecommendation, addFavorite, getRecipeLikeStats, getRecipeImages, RecommendationLikeStats } from "../../../lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -65,7 +65,7 @@ export default function ResultPage({ params }: { params: { id: string } }) {
     })();
   }, [params.id]);
 
-  // 이미지가 없는 레시피에 대해 비동기로 이미지 로드
+  // 이미지가 없는 레시피에 대해 비동기로 이미지 로드 (배치 요청)
   useEffect(() => {
     if (!data?.recipes) return;
 
@@ -73,30 +73,34 @@ export default function ResultPage({ params }: { params: { id: string } }) {
     // 초기 이미지 상태 설정 (기존 image_url 사용)
     setRecipeImages(recipes.map((r: any) => r.image_url ?? null));
 
-    // 이미지가 없는 레시피 인덱스 찾기
-    const missingIndices = recipes
-      .map((r: any, i: number) => (!r.image_url ? i : -1))
-      .filter((i) => i !== -1);
+    // 이미지가 없는 레시피 찾기
+    const missingRecipes = recipes
+      .map((r: any, i: number) => (!r.image_url ? { index: i, title: r.title } : null))
+      .filter((x): x is { index: number; title: string } => x !== null);
 
-    if (missingIndices.length === 0) return;
+    if (missingRecipes.length === 0) return;
 
     // 로딩 상태 설정
-    setImageLoading(recipes.map((_, i) => missingIndices.includes(i)));
+    const missingSet = new Set(missingRecipes.map((m) => m.index));
+    setImageLoading(recipes.map((_, i) => missingSet.has(i)));
 
-    // 병렬로 이미지 생성 요청
-    missingIndices.forEach(async (idx) => {
-      const imageUrl = await getRecipeImage(recipes[idx].title);
+    // 1개 배치 요청으로 모든 이미지 생성 (recommendation_id 전달하여 DB 업데이트)
+    (async () => {
+      const titles = missingRecipes.map((m) => m.title);
+      const results = await getRecipeImages(titles, data.id);
+
+      // 결과를 제목 기준으로 매핑
+      const imageMap = new Map(results.map((r) => [r.title, r.image_url]));
+
       setRecipeImages((prev) => {
         const next = [...prev];
-        next[idx] = imageUrl;
+        for (const { index, title } of missingRecipes) {
+          next[index] = imageMap.get(title) ?? null;
+        }
         return next;
       });
-      setImageLoading((prev) => {
-        const next = [...prev];
-        next[idx] = false;
-        return next;
-      });
-    });
+      setImageLoading(recipes.map(() => false));
+    })();
   }, [data]);
 
   // 로그인 후 pendingFavorite 자동 처리

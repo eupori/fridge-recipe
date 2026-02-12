@@ -274,6 +274,33 @@ export async function getRecipeImage(title: string): Promise<string | null> {
   }
 }
 
+export type BatchImageResult = {
+  title: string;
+  image_url: string | null;
+};
+
+export async function getRecipeImages(
+  titles: string[],
+  recommendationId?: string
+): Promise<BatchImageResult[]> {
+  try {
+    const body: { titles: string[]; recommendation_id?: string } = { titles };
+    if (recommendationId) {
+      body.recommendation_id = recommendationId;
+    }
+    const res = await fetch(`${API_BASE}/images/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return titles.map((t) => ({ title: t, image_url: null }));
+    const data = await res.json();
+    return data.images ?? [];
+  } catch {
+    return titles.map((t) => ({ title: t, image_url: null }));
+  }
+}
+
 export async function clearAllSearchHistories(): Promise<{ deleted_count: number }> {
   const res = await fetch(`${API_BASE}/search-histories/all`, {
     method: "DELETE",

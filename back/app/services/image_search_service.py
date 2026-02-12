@@ -22,6 +22,7 @@ import asyncio
 import base64
 import json
 import logging
+import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from urllib.parse import quote
@@ -112,8 +113,8 @@ class GoogleImageSearchAdapter(ImageSearchAdapter):
 
     BASE_URL = "https://www.googleapis.com/customsearch/v1"
 
-    def __init__(self):
-        self.api_key = settings.google_api_key
+    def __init__(self, api_key: str | None = None):
+        self.api_key = api_key or settings.google_api_key
         self.cx = settings.google_search_engine_id
         self.timeout = settings.image_search_timeout
 
@@ -305,6 +306,8 @@ class GeminiImageGenerationAdapter(ImageSearchAdapter):
         self.timeout = settings.image_search_timeout
         self._client = None
 
+        # 레퍼런스 이미지는 Google Images 스크래핑으로 확보 (API 키 불필요)
+
         if not self.api_key:
             logger.warning("Gemini API 키 미설정. Mock 모드로 전환됩니다.")
 
@@ -320,19 +323,8 @@ class GeminiImageGenerationAdapter(ImageSearchAdapter):
                 raise
         return self._client
 
-    def _build_prompt(self, recipe_title: str) -> str:
-        """
-        한국 음식 이미지 생성 프롬프트 구성
-
-        한국어 → 영어 번역을 활용하여 정확한 음식 이미지 생성
-
-        Args:
-            recipe_title: 레시피 제목 (한국어)
-
-        Returns:
-            영문 이미지 생성 프롬프트
-        """
-        # 한국어 → 영어 번역 조회
+    def _get_english_name(self, recipe_title: str) -> str:
+        """한국어 레시피 제목을 영어명으로 변환"""
         english_name = KOREAN_FOOD_TRANSLATIONS.get(recipe_title, None)
 
         # 부분 일치 검색
@@ -342,17 +334,134 @@ class GeminiImageGenerationAdapter(ImageSearchAdapter):
                     english_name = english_translation
                     break
 
-        # 번역이 없으면 기본 템플릿 사용
+        # 번역이 없으면 기본 템플릿
         if english_name is None:
             english_name = f"{recipe_title} Korean dish"
 
-        prompt = f"""Professional food photography of {recipe_title} ({english_name}).
+        return english_name
+
+    def _build_prompt(self, recipe_title: str, has_reference: bool = False) -> str:
+        """
+        한국 음식 이미지 생성 프롬프트 구성
+
+        Args:
+            recipe_title: 레시피 제목 (한국어)
+            has_reference: 레퍼런스 이미지가 있는 경우 True
+
+        Returns:
+            영문 이미지 생성 프롬프트
+        """
+        english_name = self._get_english_name(recipe_title)
+
+        if has_reference:
+            prompt = f"""Create a realistic food photo of {recipe_title} ({english_name}).
+The attached image shows a similar real dish for reference.
+Generate a new photorealistic image of this Korean dish with:
+natural lighting, top-down angle, ceramic plate,
+appetizing colors, restaurant-quality plating, shallow depth of field.
+Do NOT copy the reference exactly - create a fresh, realistic photo."""
+        else:
+            prompt = f"""Professional food photography of {recipe_title} ({english_name}).
 Korean cuisine, appetizing presentation, warm natural lighting,
 top-down view on a beautiful ceramic plate, restaurant quality,
 high resolution, photorealistic, shallow depth of field,
 garnished with fresh herbs, steam rising from the dish."""
 
         return prompt
+
+    async def _download_image(self, image_url: str, source: str, query: str) -> bytes | None:
+        """이미지 URL에서 바이트 다운로드"""
+        try:
+            async with httpx.AsyncClient(timeout=3.0, follow_redirects=True) as client:
+                resp = await client.get(image_url)
+                resp.raise_for_status()
+
+                content_type = resp.headers.get("content-type", "")
+                if not content_type.startswith("image/"):
+                    logger.warning(f"[{source}] 레퍼런스 URL이 이미지가 아님: {content_type}")
+                    return None
+
+                image_bytes = resp.content
+                if len(image_bytes) < 1000:
+                    logger.warning(f"[{source}] 이미지가 너무 작음: {len(image_bytes)} bytes")
+                    return None
+
+                logger.info(
+                    f"[{source}] 레퍼런스 이미지 다운로드 성공: '{query}' ({len(image_bytes)} bytes)"
+                )
+                return image_bytes
+
+        except httpx.TimeoutException:
+            logger.warning(f"[{source}] 레퍼런스 이미지 다운로드 타임아웃: '{query}'")
+            return None
+        except Exception as e:
+            logger.warning(f"[{source}] 레퍼런스 이미지 다운로드 실패: '{query}' - {e}")
+            return None
+
+    async def _scrape_google_images(self, query: str) -> str | None:
+        """
+        Google Images HTML 스크래핑으로 이미지 URL 검색 (API 키 불필요)
+        """
+        import re
+
+        try:
+            english_name = self._get_english_name(query)
+            search_query = quote(f"{query} {english_name} 음식 사진")
+            url = f"https://www.google.com/search?q={search_query}&tbm=isch&ijn=0"
+            headers = {
+                "User-Agent": (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                )
+            }
+
+            async with httpx.AsyncClient(timeout=3.0, follow_redirects=True) as client:
+                resp = await client.get(url, headers=headers)
+                resp.raise_for_status()
+
+            # HTML에서 이미지 URL 추출
+            urls = re.findall(
+                r'\["(https?://[^"]+\.(?:jpg|jpeg|png|webp)(?:\?[^"]*)?)"',
+                resp.text,
+            )
+            # Google 자체 이미지 제외
+            urls = [
+                u for u in urls
+                if "gstatic.com" not in u
+                and "google.com" not in u
+                and "googleapis.com" not in u
+            ]
+
+            if urls:
+                logger.info(f"[Google Scrape] 이미지 URL 발견: '{query}' → {urls[0][:80]}")
+                return urls[0]
+
+            logger.warning(f"[Google Scrape] 이미지 URL 찾지 못함: '{query}'")
+            return None
+
+        except Exception as e:
+            logger.warning(f"[Google Scrape] 검색 실패: '{query}' - {e}")
+            return None
+
+    async def _fetch_reference_image(self, query: str) -> bytes | None:
+        """
+        Google Images 스크래핑으로 레퍼런스 이미지 다운로드 (API 키 불필요)
+
+        Args:
+            query: 레시피 제목
+
+        Returns:
+            이미지 바이트 또는 None (실패 시)
+        """
+        image_url = await self._scrape_google_images(query)
+        if image_url:
+            result = await self._download_image(image_url, "Google Scrape", query)
+            if result:
+                return result
+
+        logger.warning(f"레퍼런스 이미지 확보 실패: '{query}'")
+        return None
 
     def _compress_image(self, image_bytes: bytes, max_size: int = 100000) -> tuple[bytes, str]:
         """
@@ -400,7 +509,11 @@ garnished with fresh herbs, steam rising from the dish."""
 
     async def search_image(self, query: str) -> str | None:
         """
-        이미지 생성 후 압축된 base64 data URL 반환
+        레퍼런스 이미지 기반 Gemini 이미지 생성 후 압축된 base64 data URL 반환
+
+        1. Google 이미지 검색으로 레퍼런스 이미지 확보
+        2. 레퍼런스 + 프롬프트로 Gemini 이미지 생성 (실사감 향상)
+        3. 레퍼런스 실패 시 텍스트 전용 프롬프트로 폴백
 
         Args:
             query: 레시피 제목 (검색이 아닌 생성용으로 사용)
@@ -416,9 +529,22 @@ garnished with fresh herbs, steam rising from the dish."""
             from google.genai import types
 
             client = self._get_client()
-            prompt = self._build_prompt(query)
 
-            logger.info(f"Gemini 이미지 생성 시작: '{query}' (모델: {self.model})")
+            # 레퍼런스 이미지 확보 시도 (3초 제한, 초과 시 텍스트 전용)
+            try:
+                reference_bytes = await asyncio.wait_for(
+                    self._fetch_reference_image(query), timeout=3.0
+                )
+            except asyncio.TimeoutError:
+                logger.warning(f"레퍼런스 이미지 확보 타임아웃 (3초): '{query}', 텍스트 전용으로 진행")
+                reference_bytes = None
+            has_reference = reference_bytes is not None
+            prompt = self._build_prompt(query, has_reference=has_reference)
+
+            if has_reference:
+                logger.info(f"Gemini 이미지 생성 시작 (레퍼런스 포함): '{query}' (모델: {self.model})")
+            else:
+                logger.info(f"Gemini 이미지 생성 시작 (텍스트 전용): '{query}' (모델: {self.model})")
 
             # 동기 API를 비동기 실행 (Gemini SDK는 현재 동기만 지원)
             loop = asyncio.get_event_loop()
@@ -426,11 +552,13 @@ garnished with fresh herbs, steam rising from the dish."""
             # 모델 유형에 따라 다른 API 사용
             if self.model.startswith("imagen"):
                 # Imagen 모델: generate_images 사용 (유료 계정 필요)
+                # 레퍼런스 이미지는 Imagen에서 미지원, 텍스트 전용 프롬프트 사용
+                text_only_prompt = self._build_prompt(query, has_reference=False)
                 response = await loop.run_in_executor(
                     None,
                     lambda: client.models.generate_images(
                         model=self.model,
-                        prompt=prompt,
+                        prompt=text_only_prompt,
                         config=types.GenerateImagesConfig(
                             number_of_images=1,
                         ),
@@ -450,11 +578,31 @@ garnished with fresh herbs, steam rising from the dish."""
                     return data_url
             else:
                 # Gemini 이미지 생성 모델: generate_content 사용
+                # 레퍼런스 이미지가 있으면 contents에 이미지 + 텍스트 전달
+                if has_reference:
+                    from io import BytesIO
+
+                    from PIL import Image as PILImage
+
+                    # 레퍼런스 이미지를 PIL로 로드하여 Gemini에 전달
+                    ref_image = PILImage.open(BytesIO(reference_bytes))
+                    # RGBA → RGB 변환
+                    if ref_image.mode in ("RGBA", "P"):
+                        ref_image = ref_image.convert("RGB")
+                    # 레퍼런스 이미지 리사이즈 (너무 크면 비용 증가)
+                    max_ref_dim = 512
+                    if ref_image.width > max_ref_dim or ref_image.height > max_ref_dim:
+                        ref_image.thumbnail((max_ref_dim, max_ref_dim), PILImage.Resampling.LANCZOS)
+
+                    contents = [ref_image, prompt]
+                else:
+                    contents = prompt
+
                 response = await loop.run_in_executor(
                     None,
                     lambda: client.models.generate_content(
                         model=self.model,
-                        contents=prompt,
+                        contents=contents,
                         config=types.GenerateContentConfig(response_modalities=["TEXT", "IMAGE"]),
                     ),
                 )
@@ -468,7 +616,9 @@ garnished with fresh herbs, steam rising from the dish."""
                             b64_data = base64.b64encode(compressed_bytes).decode("utf-8")
                             data_url = f"data:{mime_type};base64,{b64_data}"
                             logger.info(
-                                f"Gemini 이미지 생성 성공: '{query}' (압축 후: {len(compressed_bytes)} bytes)"
+                                f"Gemini 이미지 생성 성공: '{query}' "
+                                f"({'레퍼런스 포함' if has_reference else '텍스트 전용'}, "
+                                f"압축 후: {len(compressed_bytes)} bytes)"
                             )
                             return data_url
 
@@ -501,8 +651,12 @@ class ImageSearchService:
     - 파일 기반 영구 캐싱으로 서버 재시작 후에도 캐시 유지
     """
 
-    # 캐시 파일 경로 (back/data/image_cache.json)
-    CACHE_FILE = Path(__file__).parent.parent.parent / "data" / "image_cache.json"
+    # Lambda 환경이면 /tmp (warm 인스턴스 간 유지), 로컬이면 기존 경로
+    CACHE_FILE = (
+        Path("/tmp/image_cache.json")
+        if os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+        else Path(__file__).parent.parent.parent / "data" / "image_cache.json"
+    )
 
     def __init__(self):
         # Primary provider 선택
