@@ -1,4 +1,2 @@
 User-agent: *
 Allow: /
-
-Sitemap: https://recipe.eupori.dev/sitemap.xml
