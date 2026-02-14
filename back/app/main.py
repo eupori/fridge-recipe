@@ -2,6 +2,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
@@ -9,6 +10,14 @@ from starlette.staticfiles import StaticFiles
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import create_tables
+
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        environment=settings.app_env,
+        traces_sample_rate=0.1,
+        profiles_sample_rate=0.1,
+    )
 
 
 @asynccontextmanager
@@ -80,6 +89,10 @@ def create_app() -> FastAPI:
         - **env**: 현재 환경 (dev, staging, prod 등)
         """
         return {"ok": True, "env": settings.app_env}
+
+    @app.get("/sentry-debug", include_in_schema=False)
+    async def sentry_debug():
+        raise ZeroDivisionError("Sentry test error")
 
     app.include_router(api_router, prefix="/api/v1")
 
