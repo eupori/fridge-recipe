@@ -5,8 +5,6 @@ services:
       - "8000:8000"
     env_file:
       - .env.production
-    environment:
-      - SENTRY_DSN=${SENTRY_DSN:-}
     volumes:
       - ./data:/app/data
     restart: always
