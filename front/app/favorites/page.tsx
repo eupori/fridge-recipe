@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getFavorites, removeFavorite, FavoriteResponse } from "@/lib/api";
+import { getFavorites, removeFavorite, resolveImageUrl, FavoriteResponse } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -87,10 +87,10 @@ export default function FavoritesPage() {
           {favorites.map((favorite) => (
             <Card key={favorite.id} className="overflow-hidden">
               <div className="flex">
-                {favorite.recipe_image_url && (
+                {resolveImageUrl(favorite.recipe_image_url) && (
                   <div className="w-24 h-24 md:w-32 md:h-32 shrink-0 bg-muted">
                     <img
-                      src={favorite.recipe_image_url}
+                      src={resolveImageUrl(favorite.recipe_image_url)!}
                       alt={favorite.recipe_title}
                       className="w-full h-full object-cover"
                     />

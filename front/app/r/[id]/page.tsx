@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getRecommendation, addFavorite, getRecipeLikeStats, getRecipeImages, RecommendationLikeStats } from "../../../lib/api";
+import { getRecommendation, addFavorite, getRecipeLikeStats, getRecipeImages, resolveImageUrl, RecommendationLikeStats } from "../../../lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -71,8 +71,8 @@ export default function ResultPage({ params }: { params: { id: string } }) {
     if (!data?.recipes) return;
 
     const recipes = data.recipes as any[];
-    // 초기 이미지 상태 설정 (기존 image_url 사용)
-    setRecipeImages(recipes.map((r: any) => r.image_url ?? null));
+    // 초기 이미지 상태 설정 (기존 image_url 사용, /static/ 경로 해결)
+    setRecipeImages(recipes.map((r: any) => resolveImageUrl(r.image_url)));
 
     // 이미지가 없는 레시피 찾기
     const missingRecipes = recipes
@@ -91,7 +91,7 @@ export default function ResultPage({ params }: { params: { id: string } }) {
       const results = await getRecipeImages(titles, data.id);
 
       // 결과를 제목 기준으로 매핑
-      const imageMap = new Map(results.map((r) => [r.title, r.image_url]));
+      const imageMap = new Map(results.map((r) => [r.title, resolveImageUrl(r.image_url)]));
 
       setRecipeImages((prev) => {
         const next = [...prev];

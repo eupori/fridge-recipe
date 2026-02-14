@@ -25,6 +25,16 @@ export type TokenResponse = {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000/api/v1";
 
+// API root URL (without /api/v1) for static file paths
+const API_ROOT = API_BASE.replace(/\/api\/v\d+$/, "");
+
+/** /static/... 경로를 백엔드 절대 URL로 변환 */
+export function resolveImageUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith("/static/")) return `${API_ROOT}${url}`;
+  return url;
+}
+
 // Token management
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
