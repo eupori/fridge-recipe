@@ -48,12 +48,15 @@
 - [ ] 이상한 레시피(30분/오븐 등) 차단 룰 보강
 
 ## 6. 배포
-- [x] AWS Lambda에 FastAPI 배포 (SAM + Docker)
+- [x] ~~AWS Lambda에 FastAPI 배포 (SAM + Docker)~~ → EC2로 마이그레이션 완료
+- [x] EC2 (t3.small) + Docker Compose (Nginx + FastAPI) 배포
 - [x] Vercel에 Next.js 배포
 - [x] 도메인 설정 (`eupori.dev`, `recipe.eupori.dev`, `recipe-api.eupori.dev`)
-- [x] GitHub Actions 자동배포 (백엔드, `back/**` 변경 시)
+- [x] GitHub Actions 자동배포 (백엔드, SSH → EC2 docker compose)
+- [x] Let's Encrypt SSL 인증서 + 자동 갱신
 - [x] CORS/ENV 점검
-- [ ] 로그/모니터링 확인
+- [ ] 로그/모니터링 확인 (Sentry 등)
+- [ ] Lambda 리소스 정리 (CloudFormation 스택, ECR 이미지)
 
 ## 7. 기능 이슈 트래킹
 ### ✅ 완료 (5건)
@@ -78,8 +81,12 @@
 - [x] 이슈 13: Google 애드센스 설정 (ads.txt, 스크립트, 도메인)
 - [x] 이슈 14: 도메인 설정 정리 (`eupori.dev` + `recipe.eupori.dev`)
 
+### ✅ 완료 (1건) - 2026-02-14 추가
+- [x] 이슈 15: EC2 마이그레이션 (Lambda → EC2 Docker Compose, Nginx + SSL)
+
 ### 📋 남은 이슈
-- [ ] 이슈 15: PostgreSQL 마이그레이션 (배포 시)
-- [ ] 이슈 16: 추천 데이터 DB 저장 (서버 재시작 시 데이터 유지)
-- [ ] 이슈 17: 프론트엔드 자동배포 (Vercel GitHub 연동 또는 GitHub Actions)
-- [ ] 이슈 18: `eupori.dev` 랜딩페이지 개발 시 도메인 분리
+- [ ] 이슈 16: PostgreSQL 마이그레이션
+- [ ] 이슈 17: 추천 데이터 DB 저장 (서버 재시작 시 데이터 유지)
+- [ ] 이슈 18: 프론트엔드 자동배포 (Vercel GitHub 연동 또는 GitHub Actions)
+- [ ] 이슈 19: `eupori.dev` 랜딩페이지 개발 시 도메인 분리
+- [ ] 이슈 20: Lambda 리소스 정리 (CloudFormation 스택 삭제, ECR 이미지 삭제, template.yaml 삭제)
