@@ -421,8 +421,6 @@ export default function ResultPage({ params }: { params: { id: string } }) {
         })}
       </div>
 
-      <AdUnit slot="1234567890" className="my-6" />
-
       {/* 장보기 리스트 */}
       <Card className="bg-muted/50">
         <CardContent className="pt-6">
