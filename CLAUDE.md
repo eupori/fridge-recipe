@@ -263,6 +263,7 @@ RecommendationCreate:
 - [x] ✅ 사용자 인증/계정 (JWT 기반 경량 인증)
 - [x] ✅ 레시피 즐겨찾기
 - [x] ✅ Tailwind CSS 설정
+- [x] ✅ Sentry 에러 모니터링 (프론트엔드 + 백엔드) + Slack 알림
 
 ### 계획된 기능
 
@@ -272,6 +273,7 @@ RecommendationCreate:
 - [ ] 레시피 평가
 - [ ] 영양 정보
 - [ ] 레시피 결과 캐싱 (비용 절감)
+- [ ] Google Analytics 연동
 
 ### 배포 계획
 
