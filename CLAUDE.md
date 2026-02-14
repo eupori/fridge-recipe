@@ -161,17 +161,23 @@ GET /api/v1/recommendations/{id}
 | `back/app/main.py` | FastAPI 앱 초기화, CORS 설정, 라우터 등록 |
 | `back/app/core/config.py` | Pydantic Settings - 모든 환경 변수 관리 |
 | `back/app/models/recommendation.py` | 요청/응답 Pydantic 스키마 |
-| `back/app/services/recommendation_service.py` | **레시피 생성 로직** (현재 더미 데이터) |
+| `back/app/models/guest_usage.py` | 비로그인 사용자 일일 사용량 추적 모델 |
+| `back/app/services/recommendation_service.py` | **레시피 생성 로직** |
+| `back/app/services/usage_service.py` | 비로그인 사용량 체크/증가 서비스 |
 | `back/app/services/validation.py` | 응답 검증 규칙 |
-| `back/app/routers/recommendations.py` | API 엔드포인트 |
+| `back/app/api/v1/endpoints/recommendations.py` | 추천 API 엔드포인트 (게이팅 포함) |
+| `back/app/api/v1/endpoints/stats.py` | 공개 통계 엔드포인트 |
 
 ### 프론트엔드 핵심 파일
 
 | 파일 | 용도 |
 |------|------|
-| `front/app/page.tsx` | 홈페이지 - 재료 입력 폼 |
+| `front/app/page.tsx` | 홈페이지 - 재료 입력 폼, 통계, 배너, 게이팅 UI |
 | `front/app/r/[id]/page.tsx` | 레시피 결과 페이지 (동적 라우트) |
 | `front/lib/api.ts` | 중앙화된 API 클라이언트 함수 |
+| `front/components/Navbar.tsx` | 네비게이션 바 + 다크 모드 토글 |
+| `front/components/ShareButton.tsx` | 카카오톡/Web Share/클립보드 공유 |
+| `front/components/Onboarding.tsx` | 첫 방문 3단계 온보딩 오버레이 |
 | `front/components/` | React 컴포넌트 (폼, 레시피 카드 등) |
 
 ---
@@ -264,6 +270,12 @@ RecommendationCreate:
 - [x] ✅ 레시피 즐겨찾기
 - [x] ✅ Tailwind CSS 설정
 - [x] ✅ Sentry 에러 모니터링 (프론트엔드 + 백엔드) + Slack 알림
+- [x] ✅ 다크 모드 (FOUC 방지 + Navbar 토글, `localStorage` 기반)
+- [x] ✅ 소프트 게이팅 (비로그인 IP 기반 3회/일, 로그인 시 무제한)
+- [x] ✅ 사회적 증거 통계 (`/api/v1/stats` → 홈 히어로에 레시피 수/사용자 수 표시)
+- [x] ✅ 카카오톡 공유 (Kakao SDK + Feed 템플릿, Web Share API fallback)
+- [x] ✅ 온보딩 플로우 (첫 방문 3단계 오버레이, `localStorage` 기반)
+- [x] ✅ 로그인 유도 배너 (비로그인 홈페이지 상단, `sessionStorage` 1회 닫기)
 
 ### 계획된 기능
 
@@ -366,6 +378,7 @@ LLM_PROVIDER=mock python test_llm_integration.py
 ### 프론트엔드 (`front/.env.local`)
 ```
 NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_KAKAO_JS_KEY=카카오_자바스크립트_키
 ```
 
 ### 백엔드 (`back/.env`)
@@ -393,6 +406,9 @@ IMAGE_CACHE_ENABLED=true
 # ⚠️ Google Cloud Billing 활성화 필요
 GEMINI_API_KEY=your-gemini-api-key-here
 GEMINI_IMAGE_MODEL=gemini-2.0-flash-exp-image-generation
+
+# Guest Usage (비로그인 일일 제한)
+GUEST_DAILY_LIMIT=3
 
 # Coupang (향후)
 COUPANG_PARTNERS_TRACKING_ID=
@@ -448,3 +464,9 @@ git show <commit-hash>
 5. **인메모리 저장:** 데이터 영속성 없음을 인지하고 작업 (서버 재시작 시 데이터 사라짐)
 6. **타입 안전성:** Pydantic 모델을 통해 항상 타입 검증
 7. **비동기 처리:** 레시피 생성은 async 함수 (`create_recommendation()`), 이미지 검색은 병렬 처리
+8. **다크 모드:** `globals.css`에 `.dark` CSS 변수 정의됨, `tailwind.config.ts`에 `darkMode: ["class"]`, Navbar에 ThemeToggle
+9. **소프트 게이팅:** 비로그인 사용자 IP 기반 3회/일 제한 (`guest_usage` 테이블), 로그인 시 무제한
+   - `UsageService`가 IP별 일일 사용량 관리
+   - 429 응답 시 `RateLimitError` 클래스로 프론트에서 처리
+10. **카카오 공유:** `NEXT_PUBLIC_KAKAO_JS_KEY` 설정 필요, SDK 미로드 시 Web Share API fallback
+11. **온보딩:** `localStorage("onboarding-done")`으로 첫 방문 감지, 3단계 오버레이
