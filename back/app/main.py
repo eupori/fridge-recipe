@@ -1,8 +1,7 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -11,23 +10,9 @@ from app.core.database import create_tables
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """앱 시작 시 DB 테이블 생성 (로컬 개발 환경에서만)"""
+    """앱 시작 시 DB 테이블 생성"""
     create_tables()
     yield
-
-
-class EnsureTablesMiddleware(BaseHTTPMiddleware):
-    """Lambda 환경용: 첫 요청 시 DB 테이블 생성 (lifespan 미실행 대비)"""
-
-    def __init__(self, app):
-        super().__init__(app)
-        self._initialized = False
-
-    async def dispatch(self, request: Request, call_next):
-        if not self._initialized:
-            create_tables()
-            self._initialized = True
-        return await call_next(request)
 
 
 def create_app() -> FastAPI:
@@ -68,7 +53,6 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.add_middleware(EnsureTablesMiddleware)
 
     @app.get(
         "/health",

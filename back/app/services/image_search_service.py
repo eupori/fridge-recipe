@@ -22,7 +22,6 @@ import asyncio
 import base64
 import json
 import logging
-import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from urllib.parse import quote
@@ -651,12 +650,7 @@ class ImageSearchService:
     - 파일 기반 영구 캐싱으로 서버 재시작 후에도 캐시 유지
     """
 
-    # Lambda 환경이면 /tmp (warm 인스턴스 간 유지), 로컬이면 기존 경로
-    CACHE_FILE = (
-        Path("/tmp/image_cache.json")
-        if os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
-        else Path(__file__).parent.parent.parent / "data" / "image_cache.json"
-    )
+    CACHE_FILE = Path(__file__).parent.parent.parent / "data" / "image_cache.json"
 
     def __init__(self):
         # Primary provider 선택

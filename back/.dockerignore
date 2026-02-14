@@ -1,0 +1,11 @@
+.venv
+__pycache__
+*.pyc
+.env
+.env.*
+data/
+nginx/
+docker-compose.yml
+template.yaml
+.aws-sam/
+.git

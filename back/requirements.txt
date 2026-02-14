@@ -15,7 +15,7 @@ alembic
 python-jose[cryptography]
 bcrypt
 email-validator
-# AWS Lambda
-mangum>=0.17.0
+# ASGI Server
+gunicorn>=21.2.0
 # Development
 ruff
