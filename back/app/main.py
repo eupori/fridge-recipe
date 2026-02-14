@@ -90,10 +90,6 @@ def create_app() -> FastAPI:
         """
         return {"ok": True, "env": settings.app_env}
 
-    @app.get("/sentry-debug", include_in_schema=False)
-    async def sentry_debug():
-        raise ZeroDivisionError("Sentry test error")
-
     app.include_router(api_router, prefix="/api/v1")
 
     # 정적 파일 서빙 (이미지 캐시 등)
