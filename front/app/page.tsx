@@ -15,26 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ChefHat, Clock, Users, Utensils, Loader2, Package, History, RefreshCw, ChevronRight, User, SlidersHorizontal, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
 import RecipeLoadingOverlay from "@/components/RecipeLoadingOverlay";
 import AdUnit from "@/components/AdUnit";
-
-function formatRelativeTime(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffMins < 1) return "방금 전";
-  if (diffMins < 60) return `${diffMins}분 전`;
-  if (diffHours < 24) return `${diffHours}시간 전`;
-  if (diffDays === 1) return "어제";
-  if (diffDays < 7) return `${diffDays}일 전`;
-
-  return date.toLocaleDateString("ko-KR", {
-    month: "long",
-    day: "numeric",
-  });
-}
+import { formatRelativeTime } from "@/lib/format";
 
 export default function HomePage() {
   return (
@@ -150,7 +131,7 @@ function HomePageContent() {
           exclude: [],
         },
       });
-      window.location.href = `/r/${rec.id}`;
+      router.push(`/r/${rec.id}`);
     } catch (e: any) {
       setError(e?.message ?? "요청에 실패했습니다");
       setLoading(false);
@@ -184,7 +165,7 @@ function HomePageContent() {
         },
       });
 
-      window.location.href = `/r/${rec.id}`;
+      router.push(`/r/${rec.id}`);
     } catch (e: any) {
       setError(e?.message ?? "요청에 실패했습니다");
     } finally {
@@ -480,8 +461,8 @@ function HomePageContent() {
 
       <AdUnit slot="4339934057" className="my-6" />
 
-      {/* 모바일 하단 고정 CTA */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-sm border-t sm:hidden" style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}>
+      {/* 모바일 하단 고정 CTA (BottomNav 위) */}
+      <div className="fixed bottom-14 left-0 right-0 p-4 bg-background/95 backdrop-blur-sm border-t sm:hidden z-30">
         <Button
           onClick={onSubmit}
           disabled={loading || ingredients.length === 0}
@@ -498,8 +479,8 @@ function HomePageContent() {
           )}
         </Button>
       </div>
-      {/* 모바일 하단 CTA 공간 확보 */}
-      <div className="h-20 sm:hidden" />
+      {/* 모바일 하단 CTA + BottomNav 공간 확보 */}
+      <div className="h-28 sm:hidden" />
     </main>
   );
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { Navbar } from "@/components/Navbar";
+import { BottomNav } from "@/components/BottomNav";
 
 export const metadata: Metadata = {
   title: "냉장고 레시피 | 재료로 15분 레시피 추천",
@@ -25,10 +26,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           crossOrigin="anonymous"
         />
       </head>
-      <body className="font-noto antialiased">
+      <body className="font-noto antialiased pb-14 sm:pb-0">
         <AuthProvider>
           <Navbar />
           {children}
+          <BottomNav />
         </AuthProvider>
       </body>
     </html>

@@ -74,8 +74,13 @@ export function FavoriteButton({ recommendationId, recipeIndex, recipeTitle, rec
         setFavoriteId(result.id);
         onFavoriteChange?.(true);
       }
-    } catch (err) {
-      console.error("즐겨찾기 처리 실패:", err);
+    } catch (err: any) {
+      // 이미 즐겨찾기된 경우 → 상태만 동기화
+      if (err?.message?.includes("이미 즐겨찾기")) {
+        setIsFavorite(true);
+        const result = await checkFavorite(recommendationId, recipeIndex);
+        setFavoriteId(result.favorite_id);
+      }
     } finally {
       setLoading(false);
     }
