@@ -501,7 +501,7 @@ export default function ResultPage({ params }: { params: { id: string } }) {
         </CardContent>
       </Card>
 
-      <AdUnit slot="1234567890" className="my-6" />
+      <AdUnit slot="9592260736" className="my-6" />
     </main>
   );
 }

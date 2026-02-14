@@ -430,7 +430,7 @@ function HomePageContent() {
         </CardContent>
       </Card>
 
-      <AdUnit slot="1234567890" className="my-6" />
+      <AdUnit slot="4339934057" className="my-6" />
     </main>
   );
 }
