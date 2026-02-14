@@ -103,7 +103,7 @@ uvicorn app.main:app --reload --port 8000
 ```
 fridge-recipe/
 ├── front/          # Next.js 14 (App Router, TypeScript)
-├── back/           # FastAPI (Pydantic, 인메모리 저장)
+├── back/           # FastAPI (Pydantic, SQLAlchemy + PostgreSQL)
 └── CLAUDE.md       # 이 파일
 ```
 
@@ -118,8 +118,8 @@ fridge-recipe/
 **백엔드:**
 - FastAPI (Python 3.11)
 - Pydantic (데이터 검증)
-- 인메모리 저장소 (딕셔너리 기반, 임시)
-- CORS 활성화 (로컬 개발용)
+- SQLAlchemy + PostgreSQL (프로덕션) / SQLite (로컬 개발)
+- CORS 활성화
 
 ### 데이터 흐름
 
@@ -141,14 +141,12 @@ GET /api/v1/recommendations/{id}
 레시피 3개 + 장보기 리스트 표시
 ```
 
-### 현재 저장 시스템
+### 저장 시스템
 
-**위치:** `back/app/services/recommendation_service.py`
-
-- 인메모리 딕셔너리: `_STORE = {}`
+- SQLAlchemy ORM + PostgreSQL (프로덕션: Supabase)
+- 로컬 개발: SQLite 자동 폴백 (`fridge_recipe.db`)
 - ID 형식: `rec_{uuid.uuid4().hex[:10]}`
-- **서버 재시작 시 데이터 손실**
-- 아직 데이터베이스 미연동 (계획: Supabase/Neon의 PostgreSQL)
+- 테이블 자동 생성: `create_tables()` (앱 시작 시)
 
 ---
 
@@ -228,21 +226,15 @@ getRecommendation(id) → 전체 추천 객체
 
 ## 핵심 비즈니스 로직
 
-### 레시피 생성 (현재: 더미 데이터)
+### 레시피 생성
 
-**위치:** `back/app/services/recommendation_service.py:generate_recommendations()`
+**위치:** `back/app/services/recommendation_service.py`
 
-**현재 구현:**
-- 하드코딩된 한국 레시피 반환
-- LLM 사용 안 함
-- 사용자 선호도에 대한 검증만 수행
-
-**✅ 구현 완료:**
 - Claude Sonnet 4.5 API를 사용한 실제 레시피 생성
 - 사용자의 재료, 선호도, 제약사항을 프롬프트 컨텍스트로 활용
 - LLM 출력을 구조화된 Pydantic 모델로 파싱
 - 재시도 로직 및 폴백 처리
-- Mock 모드 지원 (API 키 없이 개발 가능)
+- Mock 모드 지원 (`LLM_PROVIDER=mock`)
 
 **상세 문서:** `back/LLM_INTEGRATION_README.md` 참고
 
@@ -250,11 +242,12 @@ getRecommendation(id) → 전체 추천 객체
 
 ```python
 RecommendationCreate:
-  - ingredients: List[str]           # 사용자의 냉장고 재료
-  - time_limit_min: int             # 최대 조리 시간
-  - exclude_ingredients: List[str]   # 사용하지 않을 재료
-  - allergens: List[str]            # 알레르기 필터
-  - language: str                   # "ko" 또는 "en"
+  - ingredients: List[str]     # 사용자의 냉장고 재료 (최소 1개)
+  - constraints: Constraints   # 조리 제약조건
+    - time_limit_min: int      # 최대 조리 시간 (5-60분, 기본 15)
+    - servings: int            # 인분 (1-6, 기본 1)
+    - tools: List[str]         # 사용 가능한 조리 도구
+    - exclude: List[str]       # 제외할 재료
 ```
 
 ---
@@ -285,11 +278,13 @@ RecommendationCreate:
 - [ ] 영양 정보
 - [ ] Google Analytics 연동
 
-### 배포 계획
+### 배포 구성
 
-- **프론트엔드:** Vercel
-- **백엔드:** Render (Web Service)
-- **데이터베이스:** 외부 PostgreSQL (향후)
+- **프론트엔드:** Vercel (`eupori.dev`, `recipe.eupori.dev`)
+- **백엔드:** EC2 (t3.small) + Docker Compose (`recipe-api.eupori.dev`)
+- **데이터베이스:** PostgreSQL (Supabase)
+- **DNS:** Cloudflare (DNS only 모드)
+- **자동배포:** GitHub Actions (`back/**` 변경 → EC2), 프론트는 `vercel --prod --yes`
 
 ---
 
@@ -351,9 +346,9 @@ LLM_PROVIDER=mock python test_llm_integration.py
 - `front/.env.local`에 올바른 `NEXT_PUBLIC_API_URL`이 있는지 확인
 - `back/app/main.py`에 CORS가 설정되어 있는지 확인
 
-### 백엔드 재시작 후 데이터가 사라짐
-- 예상된 동작 - 인메모리 저장소 사용 중
-- 영구 저장이 필요하면 데이터베이스 구현
+### 로컬 개발 시 DB 초기화
+- SQLite 사용 시 `fridge_recipe.db` 파일 삭제 후 서버 재시작
+- PostgreSQL 사용 시 `DATABASE_URL` 환경 변수 설정
 
 ---
 
@@ -440,9 +435,9 @@ git show <commit-hash>
 ```
 
 최근 커밋:
-- `b60b332` - feat_add_recipe_images_and_total_ingredients
-- `5961d53` - back mvp
-- `367ecd4` - first commit
+```bash
+git log --oneline -10
+```
 
 ---
 
@@ -461,12 +456,17 @@ git show <commit-hash>
    - Google: `IMAGE_SEARCH_PROVIDER=google` (검색 기반, API 키 필요)
    - Unsplash: `IMAGE_SEARCH_PROVIDER=unsplash` (폴백용)
 4. **검증 필수:** `validation.py`의 엄격한 규칙 준수 (3개 레시피, 4-8 스텝, 시간 제한, 제외 재료)
-5. **인메모리 저장:** 데이터 영속성 없음을 인지하고 작업 (서버 재시작 시 데이터 사라짐)
+5. **DB 저장:** SQLAlchemy + PostgreSQL (프로덕션), SQLite (로컬)
 6. **타입 안전성:** Pydantic 모델을 통해 항상 타입 검증
 7. **비동기 처리:** 레시피 생성은 async 함수 (`create_recommendation()`), 이미지 검색은 병렬 처리
 8. **다크 모드:** `globals.css`에 `.dark` CSS 변수 정의됨, `tailwind.config.ts`에 `darkMode: ["class"]`, Navbar에 ThemeToggle
 9. **소프트 게이팅:** 비로그인 사용자 IP 기반 3회/일 제한 (`guest_usage` 테이블), 로그인 시 무제한
    - `UsageService`가 IP별 일일 사용량 관리
    - 429 응답 시 `RateLimitError` 클래스로 프론트에서 처리
-10. **카카오 공유:** `NEXT_PUBLIC_KAKAO_JS_KEY` 설정 필요, SDK 미로드 시 Web Share API fallback
+10. **카카오 공유:** `NEXT_PUBLIC_KAKAO_JS_KEY`는 Vercel 환경변수로 설정 (EC2 불필요), SDK 미로드 시 Web Share API fallback
 11. **온보딩:** `localStorage("onboarding-done")`으로 첫 방문 감지, 3단계 오버레이
+12. **모바일 대응 필수:** UI 작업 시 420px 기준으로 확인. 배너/카드 내 가로 배치 → 모바일에서 세로 배치 또는 줄바꿈 필요
+13. **커밋 시 제외 파일:** `back/data/images/`와 `back/data/image_cache.json`은 절대 커밋하지 말 것 (캐시 데이터)
+14. **CORS 커스텀 헤더:** 프론트에서 커스텀 응답 헤더(예: `X-Daily-Remaining`) 읽으려면 `expose_headers`에 추가 필수
+15. **JSONResponse 주의:** `@router.post(response_model=...)` 데코레이터가 있어도 `JSONResponse`로 직접 반환하면 response_model 검증 우회됨
+16. **프론트 환경변수:** `NEXT_PUBLIC_*`는 Vercel 대시보드에서 관리 (EC2와 무관)
