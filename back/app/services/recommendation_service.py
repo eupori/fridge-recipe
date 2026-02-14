@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import re
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.models.recipe_cache import RecipeCache
 from app.models.recommendation import (
     Recipe,
     RecommendationCreate,
@@ -17,12 +20,59 @@ from app.models.recommendation import (
     RecommendationResponse,
     ShoppingItem,
 )
+from app.services.coupang_service import CoupangLinkService
 from app.services.image_search_service import ImageSearchService
 from app.services.llm_adapter import MockRecipeLLMAdapter, RecipeLLMAdapter
 from app.services.validation import validate_response
 from app.services.youtube_adapter import YouTubeRecipeAdapter
 
 logger = logging.getLogger(__name__)
+
+CACHE_EXPIRY_DAYS = 7
+
+
+def build_cache_key(payload: RecommendationCreate) -> str:
+    """재료 + 제약조건으로 캐시 키 생성 (SHA256)"""
+    parts = {
+        "ingredients": sorted(i.strip().lower() for i in payload.ingredients),
+        "time_limit": payload.constraints.time_limit_min,
+        "servings": payload.constraints.servings,
+        "exclude": sorted(e.strip().lower() for e in payload.constraints.exclude),
+    }
+    raw = json.dumps(parts, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def lookup_cache(cache_key: str, db: Session) -> RecommendationResponse | None:
+    """캐시에서 레시피 조회. 만료되었으면 None 반환."""
+    entry = db.query(RecipeCache).filter(RecipeCache.cache_key == cache_key).first()
+    if not entry:
+        return None
+
+    # 7일 경과 시 만료
+    if datetime.now(UTC) - entry.created_at.replace(tzinfo=UTC) > timedelta(days=CACHE_EXPIRY_DAYS):
+        db.delete(entry)
+        db.commit()
+        logger.info(f"캐시 만료 삭제: key={cache_key[:12]}...")
+        return None
+
+    entry.hit_count += 1
+    db.commit()
+    logger.info(f"캐시 히트: key={cache_key[:12]}... (hits={entry.hit_count})")
+    return RecommendationResponse.model_validate(entry.recommendation_data)
+
+
+def save_cache(cache_key: str, response: RecommendationResponse, db: Session) -> None:
+    """레시피 결과를 캐시에 저장"""
+    entry = RecipeCache(
+        cache_key=cache_key,
+        recommendation_data=response.model_dump(mode="json"),
+        created_at=datetime.now(UTC),
+        hit_count=0,
+    )
+    db.merge(entry)
+    db.commit()
+    logger.info(f"캐시 저장: key={cache_key[:12]}...")
 
 
 def normalize_ingredient(ingredient: str) -> str:
@@ -153,6 +203,26 @@ async def create_recommendation(
     logger.info(f"레시피 생성 요청: 재료={payload.ingredients}, 제약={payload.constraints}")
     start_time = time.monotonic()
 
+    # 0. 캐시 조회
+    cache_key = build_cache_key(payload)
+    cached = lookup_cache(cache_key, db)
+    if cached is not None:
+        # 새 ID로 클론하여 반환
+        new_id = f"rec_{uuid4().hex[:10]}"
+        cloned = cached.model_copy(update={"id": new_id, "created_at": datetime.now(UTC)})
+        record = RecommendationRecord(
+            id=new_id, created_at=cloned.created_at, data=cloned.model_dump(mode="json")
+        )
+        db.add(record)
+        db.commit()
+        elapsed = time.monotonic() - start_time
+        logger.info(
+            f"💰 Cost: LLM=$0.000, Image=$0.000, Total=$0.000 "
+            f"(cache hit, {elapsed:.1f}s)"
+        )
+        logger.info(f"캐시에서 레시피 반환: ID={new_id} (캐시키={cache_key[:12]}...)")
+        return cloned
+
     # 1. 레시피 생성 어댑터 선택 (youtube → anthropic → mock)
     provider = settings.recipe_provider
     logger.info(f"레시피 Provider: {provider}")
@@ -229,7 +299,13 @@ async def create_recommendation(
 
     # 정규화하여 중복 제거 (예: "계란 1개", "계란 2개" → "계란")
     deduplicated = deduplicate_shopping_list(all_need)
-    shopping_list = [ShoppingItem(item=i) for i in deduplicated]
+
+    # 쿠팡 파트너스 링크 생성
+    coupang = CoupangLinkService()
+    shopping_list = [
+        ShoppingItem(item=i, purchase_url=coupang.generate_search_url(i))
+        for i in deduplicated
+    ]
 
     # 5. 응답 객체 생성
     rec_id = f"rec_{uuid4().hex[:10]}"
@@ -246,6 +322,26 @@ async def create_recommendation(
     )
     db.add(record)
     db.commit()
+
+    # 8. 캐시에 저장 (다음 동일 요청 시 LLM/이미지 비용 절약)
+    try:
+        save_cache(cache_key, response, db)
+    except Exception as e:
+        logger.warning(f"캐시 저장 실패 (무시): {e}")
+
+    # 9. 비용 추정 로깅
+    llm_costs = {"anthropic": 0.015, "youtube": 0.005, "mock": 0.0}
+    image_provider = settings.image_search_provider.lower()
+    img_costs_per = {"gemini": 0.039, "google": 0.005, "unsplash": 0.0, "mock": 0.0}
+    llm_cost = llm_costs.get(provider, 0.015)
+    num_images = sum(1 for r in final_recipes if r.image_url)
+    img_cost = img_costs_per.get(image_provider, 0.0) * num_images
+    total_cost = llm_cost + img_cost
+    elapsed = time.monotonic() - start_time
+    logger.info(
+        f"💰 Cost: LLM=${llm_cost:.3f}, Image=${img_cost:.3f}, Total=${total_cost:.3f} "
+        f"(provider={provider}, image={image_provider}, {elapsed:.1f}s)"
+    )
 
     logger.info(f"레시피 생성 완료: ID={rec_id}")
     return response

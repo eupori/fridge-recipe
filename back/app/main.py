@@ -1,7 +1,10 @@
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.staticfiles import StaticFiles
 
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -79,6 +82,12 @@ def create_app() -> FastAPI:
         return {"ok": True, "env": settings.app_env}
 
     app.include_router(api_router, prefix="/api/v1")
+
+    # 정적 파일 서빙 (이미지 캐시 등)
+    images_dir = Path(__file__).parent.parent / "data" / "images"
+    os.makedirs(images_dir, exist_ok=True)
+    app.mount("/static/images", StaticFiles(directory=str(images_dir)), name="static-images")
+
     return app
 
 

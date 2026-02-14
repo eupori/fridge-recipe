@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChefHat, Clock, Users, Utensils, Loader2, Package, History, RefreshCw, ChevronRight, User } from "lucide-react";
 import RecipeLoadingOverlay from "@/components/RecipeLoadingOverlay";
+import AdUnit from "@/components/AdUnit";
 
 function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString);
@@ -428,6 +429,8 @@ function HomePageContent() {
           )}
         </CardContent>
       </Card>
+
+      <AdUnit slot="1234567890" className="my-6" />
     </main>
   );
 }

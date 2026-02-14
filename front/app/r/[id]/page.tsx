@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Clock, Users, ChefHat, ShoppingCart, Lightbulb, ChevronDown, ChevronUp, Plus, Check } from "lucide-react";
+import { Clock, Users, ChefHat, ShoppingCart, Lightbulb, ChevronDown, ChevronUp, Plus, Check, ExternalLink } from "lucide-react";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import AdUnit from "@/components/AdUnit";
 import { useAuth } from "@/lib/auth-context";
 
 const PANTRY_STORAGE_KEY = "pantry-items";
@@ -420,6 +421,8 @@ export default function ResultPage({ params }: { params: { id: string } }) {
         })}
       </div>
 
+      <AdUnit slot="1234567890" className="my-6" />
+
       {/* 장보기 리스트 */}
       <Card className="bg-muted/50">
         <CardContent className="pt-6">
@@ -432,47 +435,75 @@ export default function ResultPage({ params }: { params: { id: string } }) {
           </p>
 
           {(data.shopping_list || []).length > 0 ? (
-            <ul className="grid md:grid-cols-2 gap-2">
-              {data.shopping_list.map((it: any, idx: number) => {
-                const inPantry = isInPantry(it.item);
-                return (
-                  <li key={idx} className="flex items-center justify-between text-sm group">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full ${inPantry ? "bg-green-500" : "bg-primary"}`} />
-                      <span className={inPantry ? "line-through text-muted-foreground" : ""}>
-                        {it.item}
-                      </span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => addToPantry(it.item)}
-                      disabled={inPantry}
-                      className={`h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity ${
-                        inPantry ? "opacity-100" : ""
-                      }`}
-                    >
-                      {inPantry ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 mr-1 text-green-500" />
-                          <span className="text-xs text-green-600">추가됨</span>
-                        </>
-                      ) : (
-                        <>
-                          <Plus className="w-3.5 h-3.5 mr-1" />
-                          <span className="text-xs">보유재료에 추가</span>
-                        </>
-                      )}
-                    </Button>
-                  </li>
-                );
-              })}
-            </ul>
+            <>
+              <ul className="grid md:grid-cols-2 gap-2">
+                {data.shopping_list.map((it: any, idx: number) => {
+                  const inPantry = isInPantry(it.item);
+                  return (
+                    <li key={idx} className="flex items-center justify-between text-sm group">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-1.5 h-1.5 rounded-full ${inPantry ? "bg-green-500" : "bg-primary"}`} />
+                        <span className={inPantry ? "line-through text-muted-foreground" : ""}>
+                          {it.item}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {it.purchase_url && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            asChild
+                          >
+                            <a
+                              href={it.purchase_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink className="w-3 h-3 mr-1" />
+                              쿠팡에서 구매
+                            </a>
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => addToPantry(it.item)}
+                          disabled={inPantry}
+                          className={`h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity ${
+                            inPantry ? "opacity-100" : ""
+                          }`}
+                        >
+                          {inPantry ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 mr-1 text-green-500" />
+                              <span className="text-xs text-green-600">추가됨</span>
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="w-3.5 h-3.5 mr-1" />
+                              <span className="text-xs">보유재료에 추가</span>
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              {data.shopping_list.some((it: any) => it.purchase_url) && (
+                <p className="text-xs text-muted-foreground mt-4">
+                  이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다
+                </p>
+              )}
+            </>
           ) : (
             <p className="text-sm text-muted-foreground">모든 재료를 보유하고 있습니다!</p>
           )}
         </CardContent>
       </Card>
+
+      <AdUnit slot="1234567890" className="my-6" />
     </main>
   );
 }

@@ -20,8 +20,11 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
 import logging
+import os
+import time
 from abc import ABC, abstractmethod
 from pathlib import Path
 from urllib.parse import quote
@@ -647,10 +650,14 @@ class ImageSearchService:
     기능:
     - Primary provider (Google/Unsplash/Mock) 사용
     - Fallback provider (Unsplash) 자동 전환
-    - 파일 기반 영구 캐싱으로 서버 재시작 후에도 캐시 유지
+    - 파일 기반 이미지 저장 (base64 → 파일), 캐시 JSON은 경로만 저장
+    - LRU 방식 최대 1000 항목 제한
     """
 
-    CACHE_FILE = Path(__file__).parent.parent.parent / "data" / "image_cache.json"
+    DATA_DIR = Path(__file__).parent.parent.parent / "data"
+    CACHE_FILE = DATA_DIR / "image_cache.json"
+    IMAGES_DIR = DATA_DIR / "images"
+    MAX_CACHE_ENTRIES = 1000
 
     def __init__(self):
         # Primary provider 선택
@@ -669,31 +676,118 @@ class ImageSearchService:
             self.primary = UnsplashImageSearchAdapter()
 
         # Fallback은 항상 Unsplash (Mock/Gemini 제외)
-        # Gemini는 생성 기반이라 Unsplash 폴백이 부자연스러움
         if provider not in ("mock", "gemini"):
             self.fallback = UnsplashImageSearchAdapter()
         else:
             self.fallback = None
 
-        # 파일 기반 영구 캐시 로드
+        # 이미지 저장 디렉토리 생성
+        os.makedirs(self.IMAGES_DIR, exist_ok=True)
+
+        # 파일 기반 영구 캐시 로드 + base64 마이그레이션
         self.cache_enabled = settings.image_cache_enabled
-        self.cache: dict[str, str | None] = self._load_cache()
+        self.cache: dict[str, dict] = self._load_cache()
 
         logger.info(
             f"이미지 검색 서비스 초기화: provider={provider}, cache={self.cache_enabled}, 캐시 항목={len(self.cache)}"
         )
 
-    def _load_cache(self) -> dict[str, str | None]:
-        """파일에서 캐시 로드"""
+    def _save_image_to_file(self, data_url: str) -> str | None:
+        """
+        base64 data URL을 파일로 저장하고 정적 URL 경로 반환
+
+        Args:
+            data_url: "data:image/jpeg;base64,..." 형식의 문자열
+
+        Returns:
+            "/static/images/{hash}.jpg" 형식의 URL 경로 또는 None
+        """
+        if not data_url or not data_url.startswith("data:image/"):
+            return None
+
+        try:
+            # data URL 파싱: "data:image/jpeg;base64,{data}"
+            header, b64_data = data_url.split(",", 1)
+            image_bytes = base64.b64decode(b64_data)
+
+            # 파일명: 콘텐츠 해시
+            content_hash = hashlib.sha256(image_bytes).hexdigest()[:16]
+
+            # 확장자 결정
+            if "png" in header:
+                ext = "png"
+            else:
+                ext = "jpg"
+
+            filename = f"{content_hash}.{ext}"
+            filepath = self.IMAGES_DIR / filename
+
+            if not filepath.exists():
+                filepath.write_bytes(image_bytes)
+                logger.info(f"이미지 파일 저장: {filename} ({len(image_bytes)} bytes)")
+
+            return f"/static/images/{filename}"
+        except Exception as e:
+            logger.error(f"이미지 파일 저장 실패: {e}")
+            return None
+
+    def _migrate_base64_entries(self, raw_cache: dict) -> dict:
+        """
+        기존 base64 캐시 항목을 파일 기반으로 마이그레이션
+
+        Args:
+            raw_cache: 기존 캐시 데이터 (key → value 형식)
+
+        Returns:
+            마이그레이션된 캐시 데이터 (key → {url, last_used} 형식)
+        """
+        migrated = {}
+        migrated_count = 0
+        now = time.time()
+
+        for key, value in raw_cache.items():
+            if isinstance(value, dict):
+                # 이미 새 형식
+                migrated[key] = value
+                continue
+
+            # 기존 형식: value가 직접 URL 문자열이거나 None
+            if value is None:
+                migrated[key] = {"url": None, "last_used": now}
+                continue
+
+            if isinstance(value, str) and value.startswith("data:image/"):
+                # base64 → 파일로 변환
+                file_url = self._save_image_to_file(value)
+                migrated[key] = {"url": file_url, "last_used": now}
+                migrated_count += 1
+            else:
+                # 일반 URL (Google, Unsplash 등)
+                migrated[key] = {"url": value, "last_used": now}
+
+        if migrated_count > 0:
+            logger.info(f"base64 → 파일 마이그레이션 완료: {migrated_count}개 항목")
+
+        return migrated
+
+    def _load_cache(self) -> dict[str, dict]:
+        """파일에서 캐시 로드 + 마이그레이션"""
         if not self.cache_enabled:
             return {}
 
         try:
             if self.CACHE_FILE.exists():
                 with open(self.CACHE_FILE, encoding="utf-8") as f:
-                    cache_data = json.load(f)
-                    logger.info(f"캐시 파일 로드 완료: {len(cache_data)}개 항목")
-                    return cache_data
+                    raw_cache = json.load(f)
+                    logger.info(f"캐시 파일 로드 완료: {len(raw_cache)}개 항목")
+                    migrated = self._migrate_base64_entries(raw_cache)
+
+                    # 마이그레이션 결과 저장
+                    if migrated != raw_cache:
+                        self.cache = migrated
+                        self._save_cache()
+
+                    return migrated
         except (OSError, json.JSONDecodeError) as e:
             logger.warning(f"캐시 파일 로드 실패, 새로 시작: {e}")
 
@@ -711,6 +805,37 @@ class ImageSearchService:
             logger.debug(f"캐시 파일 저장 완료: {len(self.cache)}개 항목")
         except OSError as e:
             logger.error(f"캐시 파일 저장 실패: {e}")
+
+    def _evict_lru(self):
+        """LRU 방식으로 오래된 캐시 항목 제거 (MAX_CACHE_ENTRIES 초과 시)"""
+        if len(self.cache) <= self.MAX_CACHE_ENTRIES:
+            return
+
+        # last_used 기준 정렬, 오래된 것부터 삭제
+        sorted_keys = sorted(
+            self.cache.keys(),
+            key=lambda k: self.cache[k].get("last_used", 0),
+        )
+        to_remove = len(self.cache) - self.MAX_CACHE_ENTRIES
+        for key in sorted_keys[:to_remove]:
+            del self.cache[key]
+        logger.info(f"LRU 캐시 정리: {to_remove}개 항목 삭제")
+
+    def _cache_store(self, recipe_title: str, image_url: str | None):
+        """캐시에 이미지 저장 (base64면 파일로 변환)"""
+        if not self.cache_enabled:
+            return
+
+        # base64 data URL → 파일 저장
+        stored_url = image_url
+        if image_url and image_url.startswith("data:image/"):
+            file_url = self._save_image_to_file(image_url)
+            if file_url:
+                stored_url = file_url
+
+        self.cache[recipe_title] = {"url": stored_url, "last_used": time.time()}
+        self._evict_lru()
+        self._save_cache()
 
     async def get_image(self, recipe_title: str) -> str | None:
         """
@@ -730,20 +855,18 @@ class ImageSearchService:
         """
         # 1. 캐시 확인
         if self.cache_enabled and recipe_title in self.cache:
-            cached_url = self.cache[recipe_title]
-            logger.info(f"캐시 히트: '{recipe_title}' → {cached_url}")
+            entry = self.cache[recipe_title]
+            cached_url = entry.get("url") if isinstance(entry, dict) else entry
+            entry["last_used"] = time.time()
+            logger.info(f"캐시 히트: '{recipe_title}'")
             return cached_url
 
         # 2. Primary provider 시도
         try:
             image_url = await self.primary.search_image(recipe_title)
-
             if image_url:
-                # 캐시 저장 (메모리 + 파일)
-                if self.cache_enabled:
-                    self.cache[recipe_title] = image_url
-                    self._save_cache()
-                return image_url
+                self._cache_store(recipe_title, image_url)
+                return self.cache[recipe_title]["url"] if recipe_title in self.cache else image_url
         except Exception as e:
             logger.error(f"Primary provider 에러: {e}")
 
@@ -752,24 +875,15 @@ class ImageSearchService:
             try:
                 logger.info(f"Fallback provider 시도: '{recipe_title}'")
                 image_url = await self.fallback.search_image(recipe_title)
-
                 if image_url:
-                    # 캐시 저장 (메모리 + 파일)
-                    if self.cache_enabled:
-                        self.cache[recipe_title] = image_url
-                        self._save_cache()
-                    return image_url
+                    self._cache_store(recipe_title, image_url)
+                    return self.cache[recipe_title]["url"] if recipe_title in self.cache else image_url
             except Exception as e:
                 logger.error(f"Fallback provider 에러: {e}")
 
         # 4. 모두 실패
         logger.warning(f"이미지 검색 실패 (모든 provider): '{recipe_title}'")
-
-        # None도 캐싱 (반복 검색 방지) - 메모리 + 파일
-        if self.cache_enabled:
-            self.cache[recipe_title] = None
-            self._save_cache()
-
+        self._cache_store(recipe_title, None)
         return None
 
     def clear_cache(self):

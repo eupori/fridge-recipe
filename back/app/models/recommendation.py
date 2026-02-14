@@ -64,6 +64,7 @@ class ShoppingItem(BaseModel):
     qty: float | int | None = Field(default=None, description="수량")
     unit: str | None = Field(default=None, description="단위 (예: 개, 봉, ml, g)")
     category: str | None = Field(default=None, description="카테고리 (예: 채소, 육류, 조미료)")
+    purchase_url: str | None = Field(default=None, description="쿠팡 구매 링크")
 
 
 class RecommendationResponse(BaseModel):
