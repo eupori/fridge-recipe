@@ -104,6 +104,16 @@ export function isLoggedIn(): boolean {
   return !!getToken();
 }
 
+// Rate limit error
+export class RateLimitError extends Error {
+  remaining: number;
+  constructor(message: string, remaining: number) {
+    super(message);
+    this.name = "RateLimitError";
+    this.remaining = remaining;
+  }
+}
+
 // Recommendation API
 export async function createRecommendation(payload: RecommendationCreate) {
   const res = await fetch(`${API_BASE}/recommendations`, {
@@ -111,11 +121,29 @@ export async function createRecommendation(payload: RecommendationCreate) {
     headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify(payload),
   });
+
+  if (res.status === 429) {
+    const data = await res.json().catch(() => ({}));
+    throw new RateLimitError(
+      data.detail || "일일 무료 이용 횟수를 초과했습니다.",
+      data.remaining ?? 0,
+    );
+  }
+
+  // Parse remaining count from header
+  const remaining = res.headers.get("X-Daily-Remaining");
+
   if (!res.ok) {
     const t = await res.text();
     throw new Error(t || `HTTP ${res.status}`);
   }
-  return res.json();
+
+  const result = await res.json();
+  // Attach remaining info to the result
+  if (remaining !== null) {
+    result._dailyRemaining = parseInt(remaining, 10);
+  }
+  return result;
 }
 
 export async function getRecommendation(id: string) {
@@ -308,6 +336,22 @@ export async function getRecipeImages(
     return data.images ?? [];
   } catch {
     return titles.map((t) => ({ title: t, image_url: null }));
+  }
+}
+
+// Stats API
+export type StatsResponse = {
+  total_recipes_generated: number;
+  total_users: number;
+};
+
+export async function getStats(): Promise<StatsResponse> {
+  try {
+    const res = await fetch(`${API_BASE}/stats`);
+    if (!res.ok) return { total_recipes_generated: 0, total_users: 0 };
+    return res.json();
+  } catch {
+    return { total_recipes_generated: 0, total_users: 0 };
   }
 }
 

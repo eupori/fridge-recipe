@@ -3,7 +3,7 @@
 import { Suspense, useMemo, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { createRecommendation, getSearchHistories, SearchHistoryResponse } from "../lib/api";
+import { createRecommendation, getSearchHistories, getStats, SearchHistoryResponse, StatsResponse, RateLimitError } from "../lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChefHat, Clock, Users, Utensils, Loader2, Package, History, RefreshCw, ChevronRight, User, SlidersHorizontal, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
+import { ChefHat, Clock, Users, Utensils, Loader2, Package, History, RefreshCw, ChevronRight, User, SlidersHorizontal, ChevronDown, ChevronUp, AlertCircle, LogIn, X } from "lucide-react";
 import RecipeLoadingOverlay from "@/components/RecipeLoadingOverlay";
+import { Onboarding } from "@/components/Onboarding";
 import AdUnit from "@/components/AdUnit";
 import { formatRelativeTime } from "@/lib/format";
 
@@ -71,6 +72,25 @@ function HomePageContent() {
   const [pantryItems, setPantryItems] = useState<string[]>([]);
   const [recentHistories, setRecentHistories] = useState<SearchHistoryResponse[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [dailyRemaining, setDailyRemaining] = useState<number | null>(null);
+  const [rateLimited, setRateLimited] = useState(false);
+  const [stats, setStats] = useState<StatsResponse | null>(null);
+  const [showLoginBanner, setShowLoginBanner] = useState(false);
+
+  // 비로그인 배너 표시 여부
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user && !sessionStorage.getItem("login-banner-dismissed")) {
+      setShowLoginBanner(true);
+    }
+  }, [user, authLoading]);
+
+  // 통계 로드
+  useEffect(() => {
+    getStats().then((s) => {
+      if (s.total_recipes_generated > 0) setStats(s);
+    });
+  }, []);
 
   // Pantry 재료 로드
   useEffect(() => {
@@ -120,6 +140,7 @@ function HomePageContent() {
 
     // 바로 검색 실행 (history 값 직접 사용)
     setError(null);
+    setRateLimited(false);
     setLoading(true);
     try {
       const rec = await createRecommendation({
@@ -131,9 +152,18 @@ function HomePageContent() {
           exclude: [],
         },
       });
+      if (rec._dailyRemaining !== undefined) {
+        setDailyRemaining(rec._dailyRemaining);
+      }
       router.push(`/r/${rec.id}`);
     } catch (e: any) {
-      setError(e?.message ?? "요청에 실패했습니다");
+      if (e instanceof RateLimitError) {
+        setRateLimited(true);
+        setDailyRemaining(0);
+        setError(e.message);
+      } else {
+        setError(e?.message ?? "요청에 실패했습니다");
+      }
       setLoading(false);
     }
   };
@@ -148,6 +178,7 @@ function HomePageContent() {
   // onSubmit을 useCallback으로 정의하여 autoSearch useEffect에서 사용
   const onSubmit = useCallback(async () => {
     setError(null);
+    setRateLimited(false);
     setLoading(true);
     try {
       const exclude = excludeText
@@ -165,9 +196,20 @@ function HomePageContent() {
         },
       });
 
+      // 남은 횟수 업데이트
+      if (rec._dailyRemaining !== undefined) {
+        setDailyRemaining(rec._dailyRemaining);
+      }
+
       router.push(`/r/${rec.id}`);
     } catch (e: any) {
-      setError(e?.message ?? "요청에 실패했습니다");
+      if (e instanceof RateLimitError) {
+        setRateLimited(true);
+        setDailyRemaining(0);
+        setError(e.message);
+      } else {
+        setError(e?.message ?? "요청에 실패했습니다");
+      }
     } finally {
       setLoading(false);
     }
@@ -201,6 +243,7 @@ function HomePageContent() {
 
   return (
     <main className="container max-w-3xl mx-auto py-10 px-4">
+      <Onboarding />
       <RecipeLoadingOverlay loading={loading} />
       <div className="text-center mb-8">
         <div className="flex items-center justify-center gap-2 mb-4">
@@ -213,7 +256,36 @@ function HomePageContent() {
         <p className="text-muted-foreground">
           AI가 당신의 재료로 만들 수 있는 레시피 3개와 장보기 리스트를 자동으로 정리해줍니다
         </p>
+        {stats && (
+          <p className="text-sm text-muted-foreground mt-3">
+            지금까지 <span className="font-semibold text-foreground">{stats.total_recipes_generated.toLocaleString()}개</span>의 레시피가 추천되었어요
+            {stats.total_users > 0 && (
+              <> · <span className="font-semibold text-foreground">{stats.total_users.toLocaleString()}명</span>의 사용자</>
+            )}
+          </p>
+        )}
       </div>
+
+      {showLoginBanner && !user && (
+        <div className="mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20 flex items-center gap-3">
+          <div className="flex-1 text-sm">
+            <span className="font-medium">로그인하면</span> 검색 기록 저장, 즐겨찾기, 무제한 검색을 이용할 수 있어요
+          </div>
+          <Button variant="outline" size="sm" asChild className="shrink-0">
+            <Link href="/login">로그인</Link>
+          </Button>
+          <button
+            onClick={() => {
+              setShowLoginBanner(false);
+              sessionStorage.setItem("login-banner-dismissed", "1");
+            }}
+            className="shrink-0 p-1 rounded-md hover:bg-muted transition-colors"
+            aria-label="닫기"
+          >
+            <X className="w-4 h-4 text-muted-foreground" />
+          </button>
+        </div>
+      )}
 
       <Card className="shadow-lg">
         <CardHeader>
@@ -339,27 +411,50 @@ function HomePageContent() {
           )}
 
           {error && (
-            <div className="p-4 bg-destructive/10 rounded-lg flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+            <div className={`p-4 rounded-lg flex items-start gap-3 ${rateLimited ? "bg-primary/10" : "bg-destructive/10"}`}>
+              {rateLimited ? (
+                <LogIn className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+              )}
               <div>
-                <p className="text-sm font-medium text-destructive mb-1">
-                  {error.includes("timeout") || error.includes("시간")
-                    ? "요청 시간이 초과되었습니다"
-                    : error.includes("network") || error.includes("fetch")
-                    ? "네트워크 연결을 확인해주세요"
-                    : "요청에 실패했습니다"}
-                </p>
-                <p className="text-xs text-destructive/80">{error}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-2 h-7 text-xs"
-                  onClick={onSubmit}
-                  disabled={loading}
-                >
-                  <RefreshCw className="w-3 h-3 mr-1" />
-                  다시 시도
-                </Button>
+                {rateLimited ? (
+                  <>
+                    <p className="text-sm font-medium mb-1">{error}</p>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="mt-2 h-8"
+                      asChild
+                    >
+                      <Link href="/login">
+                        <LogIn className="w-3.5 h-3.5 mr-1.5" />
+                        로그인하기
+                      </Link>
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium text-destructive mb-1">
+                      {error.includes("timeout") || error.includes("시간")
+                        ? "요청 시간이 초과되었습니다"
+                        : error.includes("network") || error.includes("fetch")
+                        ? "네트워크 연결을 확인해주세요"
+                        : "요청에 실패했습니다"}
+                    </p>
+                    <p className="text-xs text-destructive/80">{error}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 h-7 text-xs"
+                      onClick={onSubmit}
+                      disabled={loading}
+                    >
+                      <RefreshCw className="w-3 h-3 mr-1" />
+                      다시 시도
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -382,6 +477,12 @@ function HomePageContent() {
               )}
             </Button>
           </div>
+
+          {!user && dailyRemaining !== null && !rateLimited && (
+            <p className="text-xs text-center text-muted-foreground">
+              오늘 {dailyRemaining}회 남음 · 로그인하면 무제한
+            </p>
+          )}
 
           <p className="text-xs text-center text-muted-foreground">
             AI가 재료에 맞는 레시피를 생성합니다. 보유 재료를 등록하면 더 편리하게 이용할 수 있어요.

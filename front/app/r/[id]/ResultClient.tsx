@@ -286,6 +286,7 @@ export default function ResultClient({ id }: { id: string }) {
                         <ShareButton
                           title={r.title}
                           text={`${r.title} - ${r.time_min}분 레시피`}
+                          imageUrl={r.image_url || undefined}
                         />
                         <FavoriteButton
                           key={pendingProcessed?.recipeIndex === idx ? "processed" : "initial"}

@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     image_search_timeout: int = 3
     image_cache_enabled: bool = True
 
+    # Guest usage limit
+    guest_daily_limit: int = 3
+
     # Sentry
     sentry_dsn: str = ""
 

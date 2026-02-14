@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.recommendation import (
     RecommendationCreate,
@@ -11,6 +13,7 @@ from app.models.user import User
 from app.services.auth_service import get_current_user_optional
 from app.services.recommendation_service import create_recommendation, get_recommendation
 from app.services.search_history_service import SearchHistoryService
+from app.services.usage_service import UsageService
 
 router = APIRouter()
 
@@ -55,6 +58,7 @@ router = APIRouter()
 )
 async def post_recommendations(
     payload: RecommendationCreate,
+    request: Request,
     current_user: User | None = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
 ):
@@ -76,8 +80,29 @@ async def post_recommendations(
     - 각 레시피는 보유 재료와 구매 필요 재료로 분리됨
     - 통합된 장보기 리스트 (중복 제거됨)
     """
+    # 비로그인 사용자 일일 사용량 체크
+    usage_service = UsageService(db)
+    client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown").split(",")[0].strip()
+    remaining = None
+
+    if not current_user:
+        remaining = usage_service.get_remaining(client_ip)
+        if remaining <= 0:
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "detail": "일일 무료 이용 횟수를 초과했습니다. 로그인하면 무제한으로 이용할 수 있어요!",
+                    "remaining": 0,
+                },
+                headers={"X-Daily-Remaining": "0"},
+            )
+
     try:
         response = await create_recommendation(payload, db)
+
+        # 비로그인 사용자 사용량 증가
+        if not current_user:
+            remaining = usage_service.increment(client_ip)
 
         # 로그인 사용자의 경우 검색 기록 저장
         if current_user:
@@ -94,7 +119,15 @@ async def post_recommendations(
                 ),
             )
 
-        return response
+        # 응답에 남은 횟수 헤더 추가
+        headers = {}
+        if remaining is not None:
+            headers["X-Daily-Remaining"] = str(remaining)
+
+        return JSONResponse(
+            content=response.model_dump(mode="json"),
+            headers=headers,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

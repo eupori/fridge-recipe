@@ -1,10 +1,32 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
-import { ChefHat, Heart, LogOut, User, Package, History } from "lucide-react";
+import { ChefHat, Heart, LogOut, User, Package, History, Sun, Moon } from "lucide-react";
+
+function ThemeToggle() {
+  const [dark, setDark] = useState(false);
+
+  useEffect(() => {
+    setDark(document.documentElement.classList.contains("dark"));
+  }, []);
+
+  const toggle = () => {
+    const next = !dark;
+    setDark(next);
+    document.documentElement.classList.toggle("dark", next);
+    localStorage.setItem("theme", next ? "dark" : "light");
+  };
+
+  return (
+    <Button variant="ghost" size="sm" onClick={toggle} className="h-8 w-8 p-0" title={dark ? "라이트 모드" : "다크 모드"}>
+      {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+    </Button>
+  );
+}
 
 export function Navbar() {
   const { user, logout } = useAuth();
@@ -26,6 +48,8 @@ export function Navbar() {
           {/* 네비게이션 링크 & 인증 */}
           {!isAuthPage && (
             <div className="flex items-center gap-1 sm:gap-2">
+              <ThemeToggle />
+
               {/* Pantry 링크 */}
               <Button
                 variant={pathname === "/pantry" ? "secondary" : "ghost"}
@@ -88,9 +112,12 @@ export function Navbar() {
 
           {/* 인증 페이지에서는 홈 링크만 */}
           {isAuthPage && (
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/">홈으로</Link>
-            </Button>
+            <div className="flex items-center gap-1">
+              <ThemeToggle />
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/">홈으로</Link>
+              </Button>
+            </div>
           )}
         </div>
       </div>
