@@ -8,6 +8,9 @@ const config: Config = {
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
+    fontFamily: {
+      noto: ["'Noto Sans KR'", "sans-serif"],
+    },
     extend: {
       colors: {
         border: "hsl(var(--border))",

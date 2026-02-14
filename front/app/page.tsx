@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChefHat, Clock, Users, Utensils, Loader2, Package, History, RefreshCw, ChevronRight, User } from "lucide-react";
+import { ChefHat, Clock, Users, Utensils, Loader2, Package, History, RefreshCw, ChevronRight, User, SlidersHorizontal, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
 import RecipeLoadingOverlay from "@/components/RecipeLoadingOverlay";
 import AdUnit from "@/components/AdUnit";
 
@@ -49,11 +49,14 @@ function HomePageLoading() {
     <main className="container max-w-3xl mx-auto py-10 px-4">
       <div className="text-center mb-8">
         <div className="flex items-center justify-center gap-2 mb-4">
-          <ChefHat className="w-10 h-10" />
-          <h1 className="text-4xl font-bold">오늘의 냉장고 레시피</h1>
+          <ChefHat className="w-10 h-10 text-primary" />
+          <h1 className="text-4xl font-bold">냉장고 재료만 알려주세요</h1>
         </div>
-        <p className="text-muted-foreground text-lg">
-          재료를 입력하면 15분 내 가능한 레시피 3개와 장보기 리스트를 만들어줘요
+        <p className="text-2xl font-semibold text-primary mb-2">
+          15분 레시피를 만들어드려요
+        </p>
+        <p className="text-muted-foreground">
+          AI가 당신의 재료로 만들 수 있는 레시피 3개와 장보기 리스트를 자동으로 정리해줍니다
         </p>
       </div>
       <Card className="shadow-lg">
@@ -86,6 +89,7 @@ function HomePageContent() {
   const [error, setError] = useState<string | null>(null);
   const [pantryItems, setPantryItems] = useState<string[]>([]);
   const [recentHistories, setRecentHistories] = useState<SearchHistoryResponse[]>([]);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Pantry 재료 로드
   useEffect(() => {
@@ -219,11 +223,14 @@ function HomePageContent() {
       <RecipeLoadingOverlay loading={loading} />
       <div className="text-center mb-8">
         <div className="flex items-center justify-center gap-2 mb-4">
-          <ChefHat className="w-10 h-10" />
-          <h1 className="text-4xl font-bold">오늘의 냉장고 레시피</h1>
+          <ChefHat className="w-10 h-10 text-primary" />
+          <h1 className="text-4xl font-bold">냉장고 재료만 알려주세요</h1>
         </div>
-        <p className="text-muted-foreground text-lg">
-          재료를 입력하면 15분 내 가능한 레시피 3개와 장보기 리스트를 만들어줘요
+        <p className="text-2xl font-semibold text-primary mb-2">
+          15분 레시피를 만들어드려요
+        </p>
+        <p className="text-muted-foreground">
+          AI가 당신의 재료로 만들 수 있는 레시피 3개와 장보기 리스트를 자동으로 정리해줍니다
         </p>
       </div>
 
@@ -300,59 +307,100 @@ function HomePageContent() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <Utensils className="w-4 h-4" />
-              조리도구
-            </Label>
-            <div className="flex gap-2 flex-wrap">
-              {["프라이팬", "전자레인지", "에어프라이어", "냄비", "오븐", "상관없음"].map((t) => (
-                <Button
-                  key={t}
-                  type="button"
-                  onClick={() => toggleTool(t)}
-                  variant={tools.includes(t) ? "default" : "outline"}
-                  size="sm"
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full"
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+            <span>상세 설정</span>
+            {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            {(tools.length > 0 && !tools.includes("상관없음") || excludeText.trim()) && (
+              <span className="ml-auto text-xs text-primary">설정됨</span>
+            )}
+          </button>
+
+          {showAdvanced && (
+            <div className="space-y-4 pt-2 border-t">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Utensils className="w-4 h-4" />
+                  조리도구
+                </Label>
+                <div className="flex gap-2 flex-wrap">
+                  {["프라이팬", "전자레인지", "에어프라이어", "냄비", "오븐", "상관없음"].map((t) => (
+                    <Button
+                      key={t}
+                      type="button"
+                      onClick={() => toggleTool(t)}
+                      variant={tools.includes(t) ? "default" : "outline"}
+                      size="sm"
+                      disabled={loading}
+                      aria-pressed={tools.includes(t)}
+                    >
+                      {t}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="exclude">제외 재료 / 알레르기</Label>
+                <Input
+                  id="exclude"
+                  value={excludeText}
+                  onChange={(e) => setExcludeText(e.target.value)}
+                  placeholder="예: 우유, 땅콩"
                   disabled={loading}
-                >
-                  {t}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="exclude">제외 재료 / 알레르기</Label>
-            <Input
-              id="exclude"
-              value={excludeText}
-              onChange={(e) => setExcludeText(e.target.value)}
-              placeholder="예: 우유, 땅콩"
-              disabled={loading}
-            />
-          </div>
-
-          {error && (
-            <div className="p-4 bg-destructive/10 text-destructive rounded-md text-sm">
-              {error}
+                />
+              </div>
             </div>
           )}
 
-          <Button
-            onClick={onSubmit}
-            disabled={loading || ingredients.length === 0}
-            className="w-full h-12 text-base font-semibold"
-            size="lg"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                레시피 생성 중...
-              </>
-            ) : (
-              "레시피 3개 추천받기"
-            )}
-          </Button>
+          {error && (
+            <div className="p-4 bg-destructive/10 rounded-lg flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-destructive mb-1">
+                  {error.includes("timeout") || error.includes("시간")
+                    ? "요청 시간이 초과되었습니다"
+                    : error.includes("network") || error.includes("fetch")
+                    ? "네트워크 연결을 확인해주세요"
+                    : "요청에 실패했습니다"}
+                </p>
+                <p className="text-xs text-destructive/80">{error}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 h-7 text-xs"
+                  onClick={onSubmit}
+                  disabled={loading}
+                >
+                  <RefreshCw className="w-3 h-3 mr-1" />
+                  다시 시도
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* 데스크톱 CTA */}
+          <div className="hidden sm:block">
+            <Button
+              onClick={onSubmit}
+              disabled={loading || ingredients.length === 0}
+              className="w-full h-12 text-base font-semibold"
+              size="lg"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  레시피 생성 중...
+                </>
+              ) : (
+                "레시피 3개 추천받기"
+              )}
+            </Button>
+          </div>
 
           <p className="text-xs text-center text-muted-foreground">
             AI가 재료에 맞는 레시피를 생성합니다. 보유 재료를 등록하면 더 편리하게 이용할 수 있어요.
@@ -431,6 +479,27 @@ function HomePageContent() {
       </Card>
 
       <AdUnit slot="4339934057" className="my-6" />
+
+      {/* 모바일 하단 고정 CTA */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-sm border-t sm:hidden" style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}>
+        <Button
+          onClick={onSubmit}
+          disabled={loading || ingredients.length === 0}
+          className="w-full h-12 text-base font-semibold"
+          size="lg"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              레시피 생성 중...
+            </>
+          ) : (
+            "레시피 3개 추천받기"
+          )}
+        </Button>
+      </div>
+      {/* 모바일 하단 CTA 공간 확보 */}
+      <div className="h-20 sm:hidden" />
     </main>
   );
 }

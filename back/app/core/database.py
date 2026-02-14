@@ -49,4 +49,8 @@ def get_db():
 
 def create_tables():
     """모든 테이블 생성 (개발용)"""
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine, checkfirst=True)
+    except Exception:
+        # 여러 gunicorn 워커가 동시에 시작할 때 race condition 방지
+        pass

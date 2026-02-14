@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Clock, Users, ChefHat, ShoppingCart, Lightbulb, ChevronDown, ChevronUp, Plus, Check, ExternalLink } from "lucide-react";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { ShareButton } from "@/components/ShareButton";
 import AdUnit from "@/components/AdUnit";
 import { useAuth } from "@/lib/auth-context";
 
@@ -16,7 +17,7 @@ const PANTRY_STORAGE_KEY = "pantry-items";
 export default function ResultPage({ params }: { params: { id: string } }) {
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(0);
   const [likeStats, setLikeStats] = useState<RecommendationLikeStats | null>(null);
   const [pantryItems, setPantryItems] = useState<string[]>([]);
   const [recipeImages, setRecipeImages] = useState<(string | null)[]>([]);
@@ -222,7 +223,6 @@ export default function ResultPage({ params }: { params: { id: string } }) {
           <ChefHat className="w-6 h-6" />
           <h1 className="text-3xl font-bold">추천 레시피</h1>
         </div>
-        <p className="text-muted-foreground text-sm">ID: {data.id}</p>
       </div>
 
       <div className="space-y-4 mb-8">
@@ -245,6 +245,10 @@ export default function ResultPage({ params }: { params: { id: string } }) {
                           src={imageUrl}
                           alt={r.title}
                           className="w-full h-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                          width={160}
+                          height={160}
                         />
                       </div>
                     );
@@ -271,6 +275,10 @@ export default function ResultPage({ params }: { params: { id: string } }) {
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <h3 className="font-bold text-lg leading-tight">{r.title}</h3>
                       <div className="flex items-center gap-1">
+                        <ShareButton
+                          title={r.title}
+                          text={`${r.title} - ${r.time_min}분 레시피`}
+                        />
                         <FavoriteButton
                           key={pendingProcessed?.recipeIndex === idx ? "processed" : "initial"}
                           recommendationId={data.id}
@@ -323,6 +331,7 @@ export default function ResultPage({ params }: { params: { id: string } }) {
                     size="sm"
                     className="mt-2 w-fit p-0 h-auto text-primary hover:text-primary/80"
                     onClick={() => toggleExpand(idx)}
+                    aria-expanded={isExpanded}
                   >
                     {isExpanded ? (
                       <>접기 <ChevronUp className="w-4 h-4 ml-1" /></>
