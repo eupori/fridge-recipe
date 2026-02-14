@@ -267,23 +267,23 @@ function HomePageContent() {
       </div>
 
       {showLoginBanner && !user && (
-        <div className="mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20 flex items-center gap-3">
-          <div className="flex-1 text-sm">
-            <span className="font-medium">로그인하면</span> 검색 기록 저장, 즐겨찾기, 무제한 검색을 이용할 수 있어요
-          </div>
-          <Button variant="outline" size="sm" asChild className="shrink-0">
-            <Link href="/login">로그인</Link>
-          </Button>
+        <div className="mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20 relative">
           <button
             onClick={() => {
               setShowLoginBanner(false);
               sessionStorage.setItem("login-banner-dismissed", "1");
             }}
-            className="shrink-0 p-1 rounded-md hover:bg-muted transition-colors"
+            className="absolute top-2 right-2 p-1 rounded-md hover:bg-muted transition-colors"
             aria-label="닫기"
           >
             <X className="w-4 h-4 text-muted-foreground" />
           </button>
+          <p className="text-sm pr-6">
+            <span className="font-medium">로그인하면</span> 검색 기록 저장, 즐겨찾기, 무제한 검색을 이용할 수 있어요
+          </p>
+          <Button variant="outline" size="sm" asChild className="mt-2">
+            <Link href="/login">로그인하기</Link>
+          </Button>
         </div>
       )}
 
