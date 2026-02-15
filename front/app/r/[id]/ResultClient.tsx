@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Clock, Users, ChefHat, ShoppingCart, Lightbulb, ChevronDown, ChevronUp, Plus, Check, ExternalLink, CircleCheck, Apple, ArrowLeftRight, Archive } from "lucide-react";
+import { Clock, Users, ChefHat, ShoppingCart, Lightbulb, ChevronDown, ChevronUp, Check, ExternalLink, CircleCheck, Apple, ArrowLeftRight, Archive } from "lucide-react";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { ShareButton } from "@/components/ShareButton";
 import AdUnit from "@/components/AdUnit";
@@ -14,6 +14,24 @@ import { useAuth } from "@/lib/auth-context";
 import type { Recommendation, Recipe, ShoppingItem } from "@/types/recommendation";
 
 const PANTRY_STORAGE_KEY = "pantry-items";
+const PREFERRED_MALL_KEY = "preferred-mall";
+
+const SHOPPING_MALLS = {
+  coupang: {
+    label: "쿠팡",
+    toggleActive: "bg-[#E44232] text-white shadow-sm",
+    purchaseClass: "border-[#E44232]/30 text-[#E44232] hover:bg-[#E44232]/10",
+    buildUrl: (item: string) => `https://www.coupang.com/np/search?q=${encodeURIComponent(item)}`,
+  },
+  naver: {
+    label: "네이버쇼핑",
+    toggleActive: "bg-[#03C75A] text-white shadow-sm",
+    purchaseClass: "border-[#03C75A]/30 text-[#03C75A] hover:bg-[#03C75A]/10",
+    buildUrl: (item: string) => `https://search.shopping.naver.com/search/all?query=${encodeURIComponent(item)}`,
+  },
+} as const;
+
+type MallKey = keyof typeof SHOPPING_MALLS;
 
 export default function ResultClient({ id }: { id: string }) {
   const [data, setData] = useState<Recommendation | null>(null);
@@ -24,7 +42,29 @@ export default function ResultClient({ id }: { id: string }) {
   const [recipeImages, setRecipeImages] = useState<(string | null)[]>([]);
   const [imageLoading, setImageLoading] = useState<boolean[]>([]);
   const [completedSteps, setCompletedSteps] = useState<Record<number, Set<number>>>({});
+  const [selectedMall, setSelectedMall] = useState<MallKey>("coupang");
   const { user } = useAuth();
+
+  // localStorage에서 선호 쇼핑몰 로드
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(PREFERRED_MALL_KEY);
+      if (stored && (stored === "coupang" || stored === "naver")) {
+        setSelectedMall(stored);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const handleMallChange = (mall: MallKey) => {
+    setSelectedMall(mall);
+    try {
+      localStorage.setItem(PREFERRED_MALL_KEY, mall);
+    } catch {
+      // ignore
+    }
+  };
 
   // 보유 재료 로드
   useEffect(() => {
@@ -536,73 +576,83 @@ export default function ResultClient({ id }: { id: string }) {
       {/* 장보기 리스트 */}
       <Card className="bg-muted/50">
         <CardContent className="pt-6">
-          <div className="flex items-center gap-2 mb-2">
-            <ShoppingCart className="w-5 h-5" />
-            <h2 className="font-bold text-lg">장보기 리스트</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <ShoppingCart className="w-5 h-5" />
+              <h2 className="font-bold text-lg">장보기 리스트</h2>
+            </div>
+            {/* 쇼핑몰 선택 - 브랜드 컬러 세그먼트 */}
+            <div className="inline-flex rounded-lg bg-muted p-0.5 gap-0.5">
+              {(Object.keys(SHOPPING_MALLS) as MallKey[]).map((key) => {
+                const mall = SHOPPING_MALLS[key];
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => handleMallChange(key)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                      selectedMall === key
+                        ? mall.toggleActive
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {mall.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <p className="text-sm text-muted-foreground mb-4">
-            3개 레시피에 필요한 추가 재료 모음 (클릭하면 보유 재료에 추가)
-          </p>
 
           {(data.shopping_list || []).length > 0 ? (
             <>
-              <ul className="grid md:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                 {data.shopping_list.map((it: ShoppingItem, idx: number) => {
                   const inPantry = isInPantry(it.item);
+                  const mall = SHOPPING_MALLS[selectedMall];
+                  const purchaseUrl =
+                    selectedMall === "coupang" && it.purchase_url
+                      ? it.purchase_url
+                      : mall.buildUrl(it.item);
                   return (
-                    <li key={idx} className="flex items-center justify-between text-sm group">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-1.5 h-1.5 rounded-full ${inPantry ? "bg-green-500" : "bg-primary"}`} />
-                        <span className={inPantry ? "line-through text-muted-foreground" : ""}>
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between bg-background rounded-lg py-2 px-3 gap-2"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${inPantry ? "bg-muted-foreground/40" : "bg-orange-400"}`} />
+                        <span className={`text-sm truncate ${inPantry ? "line-through text-muted-foreground" : ""}`}>
                           {it.item}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        {it.purchase_url && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 px-2 text-xs"
-                            asChild
-                          >
-                            <a
-                              href={it.purchase_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              <ExternalLink className="w-3 h-3 mr-1" />
-                              쿠팡에서 구매
-                            </a>
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
                           onClick={() => addToPantry(it.item)}
                           disabled={inPantry}
-                          className={`h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity ${
-                            inPantry ? "opacity-100" : ""
+                          className={`text-xs px-2 py-1 rounded-md transition-colors whitespace-nowrap ${
+                            inPantry
+                              ? "text-muted-foreground bg-muted"
+                              : "text-muted-foreground border border-input hover:bg-muted"
                           }`}
                         >
-                          {inPantry ? (
-                            <>
-                              <Check className="w-3.5 h-3.5 mr-1 text-green-500" />
-                              <span className="text-xs text-green-600">추가됨</span>
-                            </>
-                          ) : (
-                            <>
-                              <Plus className="w-3.5 h-3.5 mr-1" />
-                              <span className="text-xs">보유재료에 추가</span>
-                            </>
-                          )}
-                        </Button>
+                          {inPantry ? "✓ 보유중" : "+ 보유재료"}
+                        </button>
+                        <a
+                          href={purchaseUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border whitespace-nowrap transition-colors ${mall.purchaseClass}`}
+                        >
+                          구매
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
                       </div>
-                    </li>
+                    </div>
                   );
                 })}
-              </ul>
-              {data.shopping_list.some((it: ShoppingItem) => it.purchase_url) && (
-                <p className="text-xs text-muted-foreground mt-4">
+              </div>
+              {selectedMall === "coupang" && data.shopping_list.some((it: ShoppingItem) => it.purchase_url) && (
+                <p className="text-xs text-muted-foreground mt-3">
                   이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다
                 </p>
               )}

@@ -165,6 +165,7 @@ def split_have_need(
 ) -> tuple[list[str], list[str]]:
     """
     사용자 재료와 레시피 재료를 비교하여 보유/필요 재료 분리
+    정규화(normalize_ingredient) + 부분 매칭으로 퍼지 비교
 
     Args:
         user_ingredients: 사용자가 보유한 재료 목록
@@ -173,22 +174,40 @@ def split_have_need(
     Returns:
         (보유 재료, 필요 재료) 튜플
     """
-    # 정규화: 공백 제거 + 소문자 변환
-    user_set = {i.strip().lower() for i in user_ingredients if i and i.strip()}
-    recipe_set = {i.strip().lower() for i in recipe_ingredients if i and i.strip()}
+    # 사용자 재료 정규화 세트 (원본 + 정규화)
+    user_normalized = set()
+    for i in user_ingredients:
+        if not i or not i.strip():
+            continue
+        user_normalized.add(i.strip().lower())
+        normalized = normalize_ingredient(i)
+        if normalized:
+            user_normalized.add(normalized.lower())
 
-    # 원본 대소문자 유지를 위해 매핑 생성
-    recipe_map = {i.strip().lower(): i.strip() for i in recipe_ingredients if i and i.strip()}
+    have = []
+    need = []
 
-    # 보유 재료: 사용자가 가진 것 중 레시피에 필요한 것
-    have_keys = user_set & recipe_set
-    have = sorted([recipe_map[k] for k in have_keys])
+    for ri in recipe_ingredients:
+        trimmed = ri.strip()
+        if not trimmed:
+            continue
 
-    # 필요 재료: 레시피에 필요한 것 중 사용자가 없는 것
-    need_keys = recipe_set - user_set
-    need = sorted([recipe_map[k] for k in need_keys])
+        # 매칭 시도: 1) 원본 매칭, 2) 정규화 매칭, 3) 부분 매칭(포함 관계)
+        ri_lower = trimmed.lower()
+        ri_norm = normalize_ingredient(trimmed).lower()
 
-    return have, need
+        matched = (
+            ri_lower in user_normalized
+            or ri_norm in user_normalized
+            or any(u in ri_norm or ri_norm in u for u in user_normalized if u)
+        )
+
+        if matched:
+            have.append(trimmed)
+        else:
+            need.append(trimmed)
+
+    return sorted(have), sorted(need)
 
 
 async def create_recommendation(

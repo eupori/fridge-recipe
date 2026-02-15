@@ -7,12 +7,13 @@ import {
   getSearchHistories,
   deleteSearchHistory,
   clearAllSearchHistories,
+  resolveImageUrl,
   SearchHistoryResponse,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { History, Trash2, ChefHat, Search, ExternalLink, RefreshCw } from "lucide-react";
+import { History, Trash2, ChefHat, Search, ChevronRight, RefreshCw, Clock, Users } from "lucide-react";
 import { formatRelativeTime } from "@/lib/format";
 
 export default function HistoryPage() {
@@ -70,7 +71,6 @@ export default function HistoryPage() {
   };
 
   const handleSearchAgain = (history: SearchHistoryResponse) => {
-    // 재료를 localStorage에 저장하고 메인 페이지로 이동 (자동 검색 트리거)
     localStorage.setItem("recipe-ingredients", JSON.stringify(history.ingredients.join(", ")));
     localStorage.setItem("recipe-time-limit", JSON.stringify(history.time_limit_min));
     localStorage.setItem("recipe-servings", JSON.stringify(history.servings));
@@ -87,13 +87,13 @@ export default function HistoryPage() {
 
   return (
     <main className="container max-w-3xl mx-auto py-10 px-4">
-      <div className="mb-8 flex items-start justify-between">
-        <div>
+      <div className="mb-8 flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <div className="flex items-center gap-2 mb-2">
-            <History className="w-6 h-6" />
-            <h1 className="text-3xl font-bold">최근 검색 기록</h1>
+            <History className="w-6 h-6 shrink-0" />
+            <h1 className="text-2xl sm:text-3xl font-bold">최근 검색 기록</h1>
           </div>
-          <p className="text-muted-foreground">최근 7일간의 검색 기록입니다</p>
+          <p className="text-sm text-muted-foreground">최근 7일간의 검색 기록입니다</p>
         </div>
 
         {histories.length > 0 && (
@@ -102,10 +102,11 @@ export default function HistoryPage() {
             size="sm"
             onClick={handleClearAll}
             disabled={clearing}
-            className="text-destructive hover:text-destructive"
+            className="text-destructive hover:text-destructive shrink-0"
           >
             <Trash2 className="w-4 h-4 mr-1" />
-            모두 삭제
+            <span className="hidden sm:inline">모두 삭제</span>
+            <span className="sm:hidden">삭제</span>
           </Button>
         )}
       </div>
@@ -129,64 +130,103 @@ export default function HistoryPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {histories.map((history) => (
-            <Card key={history.id} className="overflow-hidden">
-              <CardContent className="p-4">
-                {/* 검색 조건 */}
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <p className="font-medium text-lg mb-1">
-                      {history.ingredients.slice(0, 5).join(", ")}
-                      {history.ingredients.length > 5 && ` 외 ${history.ingredients.length - 5}개`}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {history.time_limit_min}분 / {history.servings}인분 / {formatRelativeTime(history.searched_at)}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDelete(history.id)}
-                    className="text-muted-foreground hover:text-destructive shrink-0"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                {/* 레시피 결과 미리보기 */}
-                <div className="flex gap-2 mb-4 overflow-x-auto">
-                  {history.recipe_titles.map((title, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center gap-2 shrink-0 px-3 py-1.5 bg-muted rounded-full text-sm"
-                    >
-                      <ChefHat className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="whitespace-nowrap">{title}</span>
+        <div className="space-y-3">
+          {histories.map((history) => {
+            const hasImages = history.recipe_images?.some((img) => img);
+            return (
+              <Card key={history.id} className="overflow-hidden">
+                <CardContent className="p-0">
+                  {/* 상단: 검색 조건 + 삭제 */}
+                  <div className="flex items-start justify-between gap-2 px-4 pt-4 pb-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-base mb-1 truncate">
+                        {history.ingredients.slice(0, 5).join(", ")}
+                        {history.ingredients.length > 5 && ` 외 ${history.ingredients.length - 5}개`}
+                      </p>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {history.time_limit_min}분
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Users className="w-3 h-3" />
+                          {history.servings}인분
+                        </span>
+                        <span>{formatRelativeTime(history.searched_at)}</span>
+                      </div>
                     </div>
-                  ))}
-                </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(history.id)}
+                      className="text-muted-foreground hover:text-destructive shrink-0 -mt-1 -mr-2 h-8 w-8"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
 
-                {/* 액션 버튼 */}
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSearchAgain(history)}
-                  >
-                    <RefreshCw className="w-4 h-4 mr-1" />
-                    다시 검색
-                  </Button>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/r/${history.recommendation_id}`}>
-                      <ExternalLink className="w-4 h-4 mr-1" />
-                      결과 보기
-                    </Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  {/* 중앙: 레시피 결과 미리보기 */}
+                  {hasImages ? (
+                    <div className="grid grid-cols-3 gap-px bg-border mx-4 my-2 rounded-lg overflow-hidden">
+                      {history.recipe_titles.map((title, idx) => {
+                        const imgUrl = resolveImageUrl(history.recipe_images?.[idx]);
+                        return (
+                          <div key={idx} className="relative bg-muted aspect-[2/1]">
+                            {imgUrl ? (
+                              <img
+                                src={imgUrl}
+                                alt={title}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <ChefHat className="w-5 h-5 text-muted-foreground/30" />
+                              </div>
+                            )}
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-1.5 pb-1 pt-4">
+                              <p className="text-[11px] text-white font-medium truncate">{title}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex gap-1.5 px-4 my-2">
+                      {history.recipe_titles.map((title, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-1.5 px-2.5 py-1 bg-muted rounded-full text-xs min-w-0"
+                        >
+                          <ChefHat className="w-3 h-3 text-muted-foreground shrink-0" />
+                          <span className="truncate">{title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 하단: 액션 버튼 */}
+                  <div className="flex items-center gap-2 px-4 pb-4 pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSearchAgain(history)}
+                      className="flex-1 sm:flex-none"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                      다시 검색
+                    </Button>
+                    <Button variant="default" size="sm" asChild className="flex-1 sm:flex-none whitespace-nowrap">
+                      <Link href={`/r/${history.recommendation_id}`} className="inline-flex items-center">
+                        결과 보기
+                        <ChevronRight className="w-3.5 h-3.5 ml-1 shrink-0" />
+                      </Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
     </main>

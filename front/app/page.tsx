@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { TagInput } from "@/components/TagInput";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChefHat, Clock, Users, Utensils, Loader2, Package, History, RefreshCw, ChevronRight, User, SlidersHorizontal, ChevronDown, ChevronUp, AlertCircle, LogIn, X, Zap, Sparkles } from "lucide-react";
 import RecipeLoadingOverlay from "@/components/RecipeLoadingOverlay";
@@ -213,7 +213,6 @@ function HomePageContent() {
       } else {
         setError(e?.message ?? "요청에 실패했습니다");
       }
-    } finally {
       setLoading(false);
     }
   }, [excludeText, ingredients, timeLimit, servings, tools, qualityLevel]);
@@ -313,16 +312,15 @@ function HomePageContent() {
                 </Button>
               )}
             </div>
-            <Textarea
+            <TagInput
               id="ingredients"
               value={ingredientsText}
-              onChange={(e) => setIngredientsText(e.target.value)}
-              rows={5}
-              placeholder="예: 계란, 김치, 양파&#10;두부"
+              onChange={setIngredientsText}
+              placeholder="예: 계란, 김치, 양파"
               disabled={loading}
             />
             <p className="text-sm text-muted-foreground">
-              인식된 재료: {ingredients.join(", ") || "(없음)"}
+              {ingredients.length > 0 ? `${ingredients.length}개 재료 입력됨` : "재료를 입력해주세요"}
             </p>
           </div>
 
