@@ -432,7 +432,8 @@ garnished with fresh herbs, steam rising from the dish."""
     async def _download_image(self, image_url: str, source: str, query: str) -> bytes | None:
         """이미지 URL에서 바이트 다운로드"""
         try:
-            async with httpx.AsyncClient(timeout=3.0, follow_redirects=True) as client:
+            dl_timeout = 10.0 if self.quality_level == "detailed" else 3.0
+            async with httpx.AsyncClient(timeout=dl_timeout, follow_redirects=True) as client:
                 resp = await client.get(image_url)
                 resp.raise_for_status()
 
@@ -476,7 +477,8 @@ garnished with fresh herbs, steam rising from the dish."""
                 )
             }
 
-            async with httpx.AsyncClient(timeout=3.0, follow_redirects=True) as client:
+            scrape_timeout = 10.0 if self.quality_level == "detailed" else 3.0
+            async with httpx.AsyncClient(timeout=scrape_timeout, follow_redirects=True) as client:
                 resp = await client.get(url, headers=headers)
                 resp.raise_for_status()
 
@@ -590,13 +592,14 @@ garnished with fresh herbs, steam rising from the dish."""
 
             client = self._get_client()
 
-            # 레퍼런스 이미지 확보 시도 (3초 제한, 초과 시 텍스트 전용)
+            # 레퍼런스 이미지 확보 시도 (정밀 모드: 15초, 기본: 3초)
+            ref_timeout = 15.0 if self.quality_level == "detailed" else 3.0
             try:
                 reference_bytes = await asyncio.wait_for(
-                    self._fetch_reference_image(query), timeout=3.0
+                    self._fetch_reference_image(query), timeout=ref_timeout
                 )
             except asyncio.TimeoutError:
-                logger.warning(f"레퍼런스 이미지 확보 타임아웃 (3초): '{query}', 텍스트 전용으로 진행")
+                logger.warning(f"레퍼런스 이미지 확보 타임아웃 ({ref_timeout}초): '{query}', 텍스트 전용으로 진행")
                 reference_bytes = None
             has_reference = reference_bytes is not None
             prompt = self._build_prompt(query, has_reference=has_reference)

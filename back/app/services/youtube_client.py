@@ -270,7 +270,7 @@ class YouTubeAPIClient:
             if client:
                 result = await _do_search(client)
             else:
-                async with httpx.AsyncClient(timeout=10) as c:
+                async with httpx.AsyncClient(timeout=20) as c:
                     result = await _do_search(c)
 
             self.quota.report_success()
@@ -286,7 +286,7 @@ class YouTubeAPIClient:
                 logger.error(f"YouTube 검색 HTTP 에러: {e.response.status_code}")
             return []
         except Exception as e:
-            logger.error(f"YouTube 검색 실패: {e}")
+            logger.error(f"YouTube 검색 실패: [{type(e).__name__}] {e}")
             return []
 
     async def get_video_details(
@@ -375,7 +375,7 @@ class YouTubeAPIClient:
             if client:
                 fetched = await _do_details(client)
             else:
-                async with httpx.AsyncClient(timeout=10) as c:
+                async with httpx.AsyncClient(timeout=20) as c:
                     fetched = await _do_details(c)
 
             self.quota.report_success()
@@ -386,8 +386,8 @@ class YouTubeAPIClient:
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 403:
                 self.quota.report_403()
-            logger.error(f"YouTube 상세 정보 조회 실패: {e}")
+            logger.error(f"YouTube 상세 정보 조회 실패: [{type(e).__name__}] {e}")
             return cached_videos
         except Exception as e:
-            logger.error(f"YouTube 상세 정보 조회 실패: {e}")
+            logger.error(f"YouTube 상세 정보 조회 실패: [{type(e).__name__}] {e}")
             return cached_videos
