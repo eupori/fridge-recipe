@@ -172,11 +172,13 @@ GET /api/v1/recommendations/{id}
 |------|------|
 | `front/app/page.tsx` | 홈페이지 - 재료 입력 폼, 통계, 배너, 게이팅 UI |
 | `front/app/r/[id]/page.tsx` | 레시피 결과 페이지 (동적 라우트) |
+| `front/app/r/[id]/ResultClient.tsx` | 결과 페이지 클라이언트 (레시피 카드, 장보기 리스트, 쇼핑몰 선택) |
+| `front/app/history/page.tsx` | 검색 기록 페이지 (이미지 썸네일 카드) |
 | `front/lib/api.ts` | 중앙화된 API 클라이언트 함수 |
+| `front/components/TagInput.tsx` | 태그/칩 기반 재료 입력 컴포넌트 |
 | `front/components/Navbar.tsx` | 네비게이션 바 + 다크 모드 토글 |
 | `front/components/ShareButton.tsx` | 카카오톡/Web Share/클립보드 공유 |
 | `front/components/Onboarding.tsx` | 첫 방문 3단계 온보딩 오버레이 |
-| `front/components/` | React 컴포넌트 (폼, 레시피 카드 등) |
 
 ---
 
@@ -269,13 +271,15 @@ RecommendationCreate:
 - [x] ✅ 카카오톡 공유 (Kakao SDK + Feed 템플릿, Web Share API fallback)
 - [x] ✅ 온보딩 플로우 (첫 방문 3단계 오버레이, `localStorage` 기반)
 - [x] ✅ 로그인 유도 배너 (비로그인 홈페이지 상단, `sessionStorage` 1회 닫기)
+- [x] ✅ 태그 기반 재료 입력 (`TagInput` 컴포넌트, 칩 UI + Enter/콤마/Backspace)
+- [x] ✅ 장보기 리스트 쇼핑몰 선택 (쿠팡/네이버쇼핑 토글, 브랜드 컬러, `localStorage` 영속)
+- [x] ✅ 재료 퍼지 매칭 (`split_have_need`에서 `normalize_ingredient` 활용)
+- [x] ✅ 검색 기록 페이지 리디자인 (레시피 이미지 썸네일, 구조화된 카드)
 
 ### 계획된 기능
 
-- [ ] 장보기 리스트용 쿠팡 파트너스 제휴 링크
 - [ ] 테스트 인프라 (현재 기본 테스트만 존재)
 - [ ] 레시피 평가
-- [ ] 영양 정보
 - [ ] Google Analytics 연동
 
 ### 배포 구성
@@ -284,7 +288,7 @@ RecommendationCreate:
 - **백엔드:** EC2 (t3.small) + Docker Compose (`recipe-api.eupori.dev`)
 - **데이터베이스:** PostgreSQL (Supabase)
 - **DNS:** Cloudflare (DNS only 모드)
-- **자동배포:** GitHub Actions (`back/**` 변경 → EC2), 프론트는 `vercel --prod --yes`
+- **자동배포:** GitHub Actions — `back/**` 변경 → EC2 deploy, `front/**` 변경 → Vercel deploy. `git push`만 하면 둘 다 자동배포
 
 ---
 
@@ -470,3 +474,7 @@ git log --oneline -10
 14. **CORS 커스텀 헤더:** 프론트에서 커스텀 응답 헤더(예: `X-Daily-Remaining`) 읽으려면 `expose_headers`에 추가 필수
 15. **JSONResponse 주의:** `@router.post(response_model=...)` 데코레이터가 있어도 `JSONResponse`로 직접 반환하면 response_model 검증 우회됨
 16. **프론트 환경변수:** `NEXT_PUBLIC_*`는 Vercel 대시보드에서 관리 (EC2와 무관)
+17. **재료 매칭 (split_have_need):** `normalize_ingredient`로 분량/수식어 제거 후 퍼지 매칭. LLM이 "계란 2개" 반환해도 사용자의 "계란"과 매칭됨
+18. **장보기 리스트 쇼핑몰:** `ResultClient.tsx`의 `SHOPPING_MALLS` 상수에 브랜드 컬러(`toggleActive`, `purchaseClass`) 포함. 쿠팡 `#E44232`, 네이버 `#03C75A`. 상태 색상과 브랜드 색상 충돌 주의 (보유 상태는 뉴트럴 톤 사용)
+19. **로딩 → 페이지 전환:** `onSubmit`에서 성공 시 `setLoading(false)` 호출 금지. `router.push()` 후 컴포넌트 언마운트로 자연스럽게 해제. `catch`에서만 `setLoading(false)`
+20. **TagInput:** `usePersistedState`와 호환 (comma-separated string). `front/components/TagInput.tsx`
