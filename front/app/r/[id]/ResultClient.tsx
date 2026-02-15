@@ -321,32 +321,16 @@ export default function ResultClient({ id }: { id: string }) {
                 })()}
 
                 {/* 우측: 핵심 정보 */}
-                <div className="flex-1 p-4 flex flex-col justify-between">
+                <div className="flex-1 p-3 sm:p-4 flex flex-col justify-between min-w-0">
                   <div>
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <h3 className="font-bold text-lg leading-tight">{r.title}</h3>
-                      <div className="flex items-center gap-1">
-                        <ShareButton
-                          title={r.title}
-                          text={`${r.title} - ${r.time_min}분 레시피`}
-                          imageUrl={r.image_url || undefined}
-                        />
-                        <FavoriteButton
-                          key={pendingProcessed?.recipeIndex === idx ? "processed" : "initial"}
-                          recommendationId={data.id}
-                          recipeIndex={idx}
-                          recipeTitle={r.title}
-                          recipeImageUrl={r.image_url}
-                          likeCount={getLikeCountForRecipe(idx)}
-                          onFavoriteChange={(isFav) => handleFavoriteChange(idx, isFav)}
-                        />
-                        <Badge variant="secondary" className="shrink-0">
-                          {idx + 1}
-                        </Badge>
-                      </div>
+                    <div className="flex items-start gap-2 mb-1">
+                      <h3 className="font-bold text-base sm:text-lg leading-tight flex-1 min-w-0">{r.title}</h3>
+                      <Badge variant="secondary" className="shrink-0">
+                        {idx + 1}
+                      </Badge>
                     </div>
 
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground mb-3">
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground mb-2">
                       <span className="flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5" />
                         {r.time_min}분
@@ -364,16 +348,16 @@ export default function ResultClient({ id }: { id: string }) {
                     </div>
 
                     <div className="space-y-1 text-sm">
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 min-w-0">
                         <span className="w-2 h-2 bg-green-500 rounded-full mt-1.5 shrink-0" />
-                        <span className="text-muted-foreground">
+                        <span className="text-muted-foreground truncate">
                           보유: {(r.ingredients_have || []).slice(0, 3).join(", ") || "-"}
                           {(r.ingredients_have || []).length > 3 && ` 외 ${r.ingredients_have.length - 3}개`}
                         </span>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 min-w-0">
                         <span className="w-2 h-2 bg-orange-500 rounded-full mt-1.5 shrink-0" />
-                        <span className="text-muted-foreground">
+                        <span className="text-muted-foreground truncate">
                           추가: {(r.ingredients_need || []).slice(0, 3).join(", ") || "없음"}
                           {(r.ingredients_need || []).length > 3 && ` 외 ${r.ingredients_need.length - 3}개`}
                         </span>
@@ -381,19 +365,37 @@ export default function ResultClient({ id }: { id: string }) {
                     </div>
                   </div>
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="mt-2 w-fit p-0 h-auto text-primary hover:text-primary/80"
-                    onClick={() => toggleExpand(idx)}
-                    aria-expanded={isExpanded}
-                  >
-                    {isExpanded ? (
-                      <>접기 <ChevronUp className="w-4 h-4 ml-1" /></>
-                    ) : (
-                      <>상세보기 <ChevronDown className="w-4 h-4 ml-1" /></>
-                    )}
-                  </Button>
+                  <div className="mt-2 flex items-center justify-between">
+                    <div className="flex items-center">
+                      <ShareButton
+                        title={r.title}
+                        text={`${r.title} - ${r.time_min}분 레시피`}
+                        imageUrl={r.image_url || undefined}
+                      />
+                      <FavoriteButton
+                        key={pendingProcessed?.recipeIndex === idx ? "processed" : "initial"}
+                        recommendationId={data.id}
+                        recipeIndex={idx}
+                        recipeTitle={r.title}
+                        recipeImageUrl={r.image_url}
+                        likeCount={getLikeCountForRecipe(idx)}
+                        onFavoriteChange={(isFav) => handleFavoriteChange(idx, isFav)}
+                      />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="p-0 h-auto text-primary hover:text-primary/80 whitespace-nowrap"
+                      onClick={() => toggleExpand(idx)}
+                      aria-expanded={isExpanded}
+                    >
+                      {isExpanded ? (
+                        <>접기 <ChevronUp className="w-4 h-4 ml-1" /></>
+                      ) : (
+                        <>상세보기 <ChevronDown className="w-4 h-4 ml-1" /></>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
 

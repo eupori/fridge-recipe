@@ -185,9 +185,9 @@ export default function PantryPage() {
         {items.length > 0 && (
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <ChefHat className="w-8 h-8 text-primary" />
+                  <ChefHat className="w-8 h-8 text-primary shrink-0" />
                   <div>
                     <p className="font-medium">재료 준비 완료!</p>
                     <p className="text-sm text-muted-foreground">
@@ -195,7 +195,7 @@ export default function PantryPage() {
                     </p>
                   </div>
                 </div>
-                <Button asChild>
+                <Button asChild className="w-full sm:w-auto">
                   <Link href="/">레시피 추천받기</Link>
                 </Button>
               </div>

@@ -103,7 +103,10 @@ export function Navbar() {
                     </Link>
                   </Button>
                   <Button variant="outline" size="sm" asChild>
-                    <Link href="/signup">회원가입</Link>
+                    <Link href="/signup">
+                      <span className="hidden sm:inline">회원가입</span>
+                      <span className="sm:hidden">가입</span>
+                    </Link>
                   </Button>
                 </>
               )}
