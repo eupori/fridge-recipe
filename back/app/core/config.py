@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = None
     # 옵션: gemini-2.0-flash-exp-image-generation (기본), imagen-4.0-generate-001 (유료 전용)
     gemini_image_model: str = "gemini-2.0-flash-exp-image-generation"
+    # 정밀 모드 전용 이미지 모델 (이미지 생성 지원 모델만 사용)
+    gemini_detailed_image_model: str = "gemini-2.0-flash-exp-image-generation"
 
 
 settings = Settings()

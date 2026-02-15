@@ -19,5 +19,7 @@ email-validator
 sentry-sdk[fastapi]
 # ASGI Server
 gunicorn>=21.2.0
+# YouTube transcript
+youtube-transcript-api>=0.6.0
 # Development
 ruff

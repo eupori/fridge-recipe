@@ -38,6 +38,16 @@ class RecommendationCreate(BaseModel):
     constraints: Constraints = Field(default_factory=Constraints, description="조리 제약 조건")
 
 
+class ReferenceVideo(BaseModel):
+    """레시피 참고 YouTube 영상"""
+
+    video_id: str = Field(description="YouTube 영상 ID")
+    title: str = Field(description="영상 제목")
+    channel: str = Field(description="채널명")
+    view_count: int = Field(description="조회수")
+    thumbnail_url: str = Field(description="썸네일 URL")
+
+
 class Recipe(BaseModel):
     """레시피 상세 정보"""
 
@@ -62,6 +72,7 @@ class Recipe(BaseModel):
     nutrition: dict | None = Field(default=None, description="영양 정보 (칼로리, 단백질 등)")
     substitutes: list[str] = Field(default_factory=list, description="대체 재료 제안")
     storage_tip: str | None = Field(default=None, description="보관 팁")
+    reference_video: ReferenceVideo | None = Field(default=None, description="참고 YouTube 영상")
 
 
 class ShoppingItem(BaseModel):

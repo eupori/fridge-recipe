@@ -37,6 +37,29 @@ logger = logging.getLogger(__name__)
 
 # 한국 음식 영어 번역 매핑 사전
 # 검색 정확도 향상을 위해 한국어 + 영어 + 문맥 키워드 조합
+# 음식 유형별 촬영 앵글 매핑 (정밀 모드 프롬프트용)
+FOOD_ANGLE_MAP: dict[str, str] = {
+    "밥": "overhead shot",
+    "볶음밥": "overhead shot",
+    "비빔밥": "overhead shot",
+    "덮밥": "overhead shot",
+    "찌개": "45-degree angle",
+    "국": "45-degree angle",
+    "탕": "45-degree angle",
+    "면": "45-degree angle",
+    "라면": "45-degree angle",
+    "국수": "45-degree angle",
+    "파스타": "45-degree angle",
+    "구이": "close-up macro",
+    "불고기": "close-up macro",
+    "삼겹살": "close-up macro",
+    "전": "overhead shot",
+    "부침개": "overhead shot",
+    "샐러드": "overhead shot",
+    "김밥": "45-degree angle",
+    "떡볶이": "45-degree angle",
+}
+
 KOREAN_FOOD_TRANSLATIONS: dict[str, str] = {
     # 밥/면 요리
     "김치볶음밥": "kimchi fried rice korean food",
@@ -299,12 +322,17 @@ class GeminiImageGenerationAdapter(ImageSearchAdapter):
     - Imagen 모델: 유료 사용자만 접근 가능
     - Gemini 이미지 생성: 무료 플랜 할당량 매우 제한적
 
-    비용: 약 $0.02-0.04/이미지
+    비용: 약 $0.02-0.04/이미지 (standard), $0.06/이미지 (detailed)
     """
 
-    def __init__(self):
+    def __init__(self, quality_level: str = "standard"):
         self.api_key = settings.gemini_api_key
-        self.model = settings.gemini_image_model
+        self.quality_level = quality_level
+        # 정밀 모드: 고품질 모델 사용
+        if quality_level == "detailed":
+            self.model = settings.gemini_detailed_image_model
+        else:
+            self.model = settings.gemini_image_model
         self.timeout = settings.image_search_timeout
         self._client = None
 
@@ -342,6 +370,15 @@ class GeminiImageGenerationAdapter(ImageSearchAdapter):
 
         return english_name
 
+    def _get_food_angle(self, recipe_title: str) -> str:
+        """음식 유형에 맞는 촬영 앵글 반환 (긴 키워드 우선 매칭)"""
+        # 구체적 키워드를 먼저 매칭 (예: "볶음밥" > "밥")
+        sorted_keywords = sorted(FOOD_ANGLE_MAP.keys(), key=len, reverse=True)
+        for keyword in sorted_keywords:
+            if keyword in recipe_title:
+                return FOOD_ANGLE_MAP[keyword]
+        return "overhead shot"
+
     def _build_prompt(self, recipe_title: str, has_reference: bool = False) -> str:
         """
         한국 음식 이미지 생성 프롬프트 구성
@@ -354,6 +391,27 @@ class GeminiImageGenerationAdapter(ImageSearchAdapter):
             영문 이미지 생성 프롬프트
         """
         english_name = self._get_english_name(recipe_title)
+
+        # 정밀 모드: 음식 유형별 앵글 + 강화 프롬프트
+        if self.quality_level == "detailed":
+            angle = self._get_food_angle(recipe_title)
+            if has_reference:
+                prompt = (
+                    f"A photorealistic {angle} of {recipe_title} ({english_name}). "
+                    f"The attached image shows a similar real dish for reference. "
+                    f"Generate a new photorealistic image with warm natural lighting, "
+                    f"appetizing food photography style, shallow depth of field, "
+                    f"steam rising gently, high-resolution. "
+                    f"Do NOT copy the reference exactly - create a fresh, realistic photo."
+                )
+            else:
+                prompt = (
+                    f"A photorealistic {angle} of {recipe_title} ({english_name}). "
+                    f"Warm natural lighting, appetizing food photography style, "
+                    f"shallow depth of field, steam rising gently, high-resolution. "
+                    f"Korean cuisine, beautiful ceramic plate, restaurant-quality plating."
+                )
+            return prompt
 
         if has_reference:
             prompt = f"""Create a realistic food photo of {recipe_title} ({english_name}).
@@ -549,7 +607,7 @@ garnished with fresh herbs, steam rising from the dish."""
                 logger.info(f"Gemini 이미지 생성 시작 (텍스트 전용): '{query}' (모델: {self.model})")
 
             # 동기 API를 비동기 실행 (Gemini SDK는 현재 동기만 지원)
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
 
             # 모델 유형에 따라 다른 API 사용
             if self.model.startswith("imagen"):
@@ -659,14 +717,15 @@ class ImageSearchService:
     IMAGES_DIR = DATA_DIR / "images"
     MAX_CACHE_ENTRIES = 1000
 
-    def __init__(self):
+    def __init__(self, quality_level: str = "standard"):
         # Primary provider 선택
         provider = settings.image_search_provider.lower()
+        self.quality_level = quality_level
 
         if provider == "google":
             self.primary = GoogleImageSearchAdapter()
         elif provider == "gemini":
-            self.primary = GeminiImageGenerationAdapter()
+            self.primary = GeminiImageGenerationAdapter(quality_level=quality_level)
         elif provider == "unsplash":
             self.primary = UnsplashImageSearchAdapter()
         elif provider == "mock":
@@ -675,8 +734,10 @@ class ImageSearchService:
             logger.warning(f"알 수 없는 provider '{provider}', Unsplash 사용")
             self.primary = UnsplashImageSearchAdapter()
 
-        # Fallback은 항상 Unsplash (Mock/Gemini 제외)
-        if provider not in ("mock", "gemini"):
+        # Fallback: Gemini 정밀 모드 실패 시 기존 모델로 폴백
+        if provider == "gemini" and quality_level == "detailed":
+            self.fallback = GeminiImageGenerationAdapter(quality_level="standard")
+        elif provider not in ("mock", "gemini"):
             self.fallback = UnsplashImageSearchAdapter()
         else:
             self.fallback = None
@@ -837,6 +898,12 @@ class ImageSearchService:
         self._evict_lru()
         self._save_cache()
 
+    def _cache_key(self, recipe_title: str) -> str:
+        """quality_level을 포함한 캐시 키 생성"""
+        if self.quality_level != "standard":
+            return f"{recipe_title}::{self.quality_level}"
+        return recipe_title
+
     async def get_image(self, recipe_title: str) -> str | None:
         """
         레시피 이미지 검색 (캐싱 + 폴백)
@@ -853,20 +920,22 @@ class ImageSearchService:
         Returns:
             이미지 URL 또는 None
         """
+        cache_key = self._cache_key(recipe_title)
+
         # 1. 캐시 확인
-        if self.cache_enabled and recipe_title in self.cache:
-            entry = self.cache[recipe_title]
+        if self.cache_enabled and cache_key in self.cache:
+            entry = self.cache[cache_key]
             cached_url = entry.get("url") if isinstance(entry, dict) else entry
             entry["last_used"] = time.time()
-            logger.info(f"캐시 히트: '{recipe_title}'")
+            logger.info(f"캐시 히트: '{cache_key}'")
             return cached_url
 
         # 2. Primary provider 시도
         try:
             image_url = await self.primary.search_image(recipe_title)
             if image_url:
-                self._cache_store(recipe_title, image_url)
-                return self.cache[recipe_title]["url"] if recipe_title in self.cache else image_url
+                self._cache_store(cache_key, image_url)
+                return self.cache[cache_key]["url"] if cache_key in self.cache else image_url
         except Exception as e:
             logger.error(f"Primary provider 에러: {e}")
 
@@ -876,14 +945,14 @@ class ImageSearchService:
                 logger.info(f"Fallback provider 시도: '{recipe_title}'")
                 image_url = await self.fallback.search_image(recipe_title)
                 if image_url:
-                    self._cache_store(recipe_title, image_url)
-                    return self.cache[recipe_title]["url"] if recipe_title in self.cache else image_url
+                    self._cache_store(cache_key, image_url)
+                    return self.cache[cache_key]["url"] if cache_key in self.cache else image_url
             except Exception as e:
                 logger.error(f"Fallback provider 에러: {e}")
 
         # 4. 모두 실패
         logger.warning(f"이미지 검색 실패 (모든 provider): '{recipe_title}'")
-        self._cache_store(recipe_title, None)
+        self._cache_store(cache_key, None)
         return None
 
     def clear_cache(self):

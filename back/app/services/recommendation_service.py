@@ -18,6 +18,7 @@ from app.models.recommendation import (
     RecommendationCreate,
     RecommendationRecord,
     RecommendationResponse,
+    ReferenceVideo,
     ShoppingItem,
 )
 from app.services.coupang_service import CoupangLinkService
@@ -286,27 +287,54 @@ async def create_recommendation(
     llm_elapsed = time.monotonic() - start_time
     logger.info(f"레시피 생성 완료: {llm_elapsed:.1f}초 (provider={provider})")
 
-    # 3. 이미지 처리 (번개 모드는 완전 스킵)
+    # 3. 이미지 처리 (번개 모드는 완전 스킵) + YouTube 참고 영상 (정밀 모드)
+    video_results: list[ReferenceVideo | None] = [None] * len(recipes_raw)
+
     if quality == "fast":
         logger.info("[번개] 이미지 스킵")
         image_results = [None] * len(recipes_raw)
     else:
-        image_service = ImageSearchService()
+        image_service = ImageSearchService(quality_level=quality)
         image_timeout = max(28 - llm_elapsed, 5)
         logger.info(f"이미지 검색 시작: {len(recipes_raw)}개 레시피 (타임아웃: {image_timeout:.1f}초)")
         image_tasks = [image_service.get_image(recipe.title) for recipe in recipes_raw]
-        try:
-            image_results = await asyncio.wait_for(
-                asyncio.gather(*image_tasks, return_exceptions=True),
-                timeout=image_timeout,
-            )
-        except asyncio.TimeoutError:
-            logger.warning(f"이미지 생성 타임아웃 ({image_timeout:.1f}초 초과), 이미지 없이 진행")
-            image_results = [None] * len(recipes_raw)
 
-    # 5. ingredients_have, ingredients_need 분리 + 이미지 URL 추가
+        # 정밀 모드: YouTube 영상도 병렬 검색
+        if quality == "detailed" and settings.youtube_api_key:
+            try:
+                from app.services.youtube_video_service import YouTubeVideoService
+
+                yt_service = YouTubeVideoService()
+                yt_tasks = [yt_service.find_reference_video(r.title) for r in recipes_raw]
+                logger.info(f"[정밀] YouTube 참고 영상 검색 시작: {len(recipes_raw)}개")
+
+                # 각 태스크를 개별 타임아웃으로 래핑하여 부분 결과 보존
+                wrapped_img = [
+                    asyncio.wait_for(t, timeout=image_timeout) for t in image_tasks
+                ]
+                wrapped_yt = [
+                    asyncio.wait_for(t, timeout=image_timeout) for t in yt_tasks
+                ]
+                all_tasks = wrapped_img + wrapped_yt
+                all_results = await asyncio.gather(*all_tasks, return_exceptions=True)
+
+                image_results = list(all_results[: len(recipes_raw)])
+                video_results = list(all_results[len(recipes_raw) :])
+            except ImportError as e:
+                logger.warning(f"[정밀] YouTube 모듈 임포트 실패, 영상 없이 진행: {e}")
+                wrapped_img = [
+                    asyncio.wait_for(t, timeout=image_timeout) for t in image_tasks
+                ]
+                image_results = await asyncio.gather(*wrapped_img, return_exceptions=True)
+        else:
+            wrapped_img = [
+                asyncio.wait_for(t, timeout=image_timeout) for t in image_tasks
+            ]
+            image_results = await asyncio.gather(*wrapped_img, return_exceptions=True)
+
+    # 5. ingredients_have, ingredients_need 분리 + 이미지 URL + 참고 영상 추가
     final_recipes = []
-    for recipe, img_result in zip(recipes_raw, image_results, strict=False):
+    for i, (recipe, img_result) in enumerate(zip(recipes_raw, image_results, strict=False)):
         have, need = split_have_need(payload.ingredients, recipe.ingredients_total)
 
         # 이미지 검색 실패 처리
@@ -315,6 +343,15 @@ async def create_recommendation(
             img_url = None
         else:
             img_url = img_result
+
+        # YouTube 영상 결과 처리
+        ref_video = None
+        if i < len(video_results) and video_results[i] is not None:
+            vr = video_results[i]
+            if isinstance(vr, ReferenceVideo):
+                ref_video = vr
+            elif isinstance(vr, Exception):
+                logger.warning(f"YouTube 영상 검색 실패 ({recipe.title}): {vr}")
 
         # Recipe 객체 재생성 (have/need 필드 + 이미지 URL 업데이트)
         final_recipe = Recipe(
@@ -332,6 +369,7 @@ async def create_recommendation(
             nutrition=recipe.nutrition,
             substitutes=recipe.substitutes or [],
             storage_tip=recipe.storage_tip,
+            reference_video=ref_video,
         )
         final_recipes.append(final_recipe)
 
@@ -382,15 +420,20 @@ async def create_recommendation(
     llm_costs = {"anthropic": 0.035, "youtube": 0.010, "mock": 0.0}
     quality_llm_overrides = {"fast": 0.007, "detailed": 0.065}
     image_provider = settings.image_search_provider.lower()
-    img_costs_per = {"gemini": 0.039, "google": 0.005, "unsplash": 0.0, "mock": 0.0}
+    # 정밀 모드 이미지 비용 (고품질 모델)
+    if quality == "detailed":
+        img_costs_per = {"gemini": 0.060, "google": 0.005, "unsplash": 0.0, "mock": 0.0}
+    else:
+        img_costs_per = {"gemini": 0.039, "google": 0.005, "unsplash": 0.0, "mock": 0.0}
     llm_cost = quality_llm_overrides.get(quality, llm_costs.get(provider, 0.015))
     num_images = sum(1 for r in final_recipes if r.image_url)
+    num_videos = sum(1 for r in final_recipes if r.reference_video)
     img_cost = img_costs_per.get(image_provider, 0.0) * num_images
     total_cost = llm_cost + img_cost
     elapsed = time.monotonic() - start_time
     logger.info(
         f"💰 Cost: LLM=${llm_cost:.3f}, Image=${img_cost:.3f}, Total=${total_cost:.3f} "
-        f"(provider={provider}, image={image_provider}, {elapsed:.1f}s)"
+        f"(provider={provider}, image={image_provider}, videos={num_videos}, {elapsed:.1f}s)"
     )
 
     logger.info(f"레시피 생성 완료: ID={rec_id}")

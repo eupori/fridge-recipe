@@ -3,13 +3,15 @@ YouTube 검색 + Haiku 구조화 어댑터
 
 YouTube Data API v3로 인기 레시피 영상을 검색한 뒤,
 Haiku 4.5로 영상 메타데이터에서 레시피 정보를 구조화합니다.
+
+공유 YouTubeAPIClient를 사용하여 쿼터를 추적합니다.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+import math
 
 import httpx
 from anthropic import Anthropic
@@ -17,34 +19,23 @@ from anthropic import Anthropic
 from app.core.config import settings
 from app.data.allergen_derivatives import expand_exclusions
 from app.models.recommendation import Recipe, RecommendationCreate
+from app.services.youtube_client import (
+    RECIPE_KEYWORDS,
+    VideoInfo,
+    YouTubeAPIClient,
+)
 
 logger = logging.getLogger(__name__)
-
-YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
-YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
-
-
-@dataclass
-class VideoInfo:
-    """YouTube 영상 메타데이터"""
-
-    video_id: str
-    title: str
-    description: str
-    view_count: int
-    channel_title: str
 
 
 class YouTubeRecipeAdapter:
     """YouTube 검색 + Haiku 구조화로 레시피 생성"""
 
     def __init__(self):
-        if not settings.youtube_api_key:
-            raise ValueError("YOUTUBE_API_KEY가 설정되지 않았습니다")
         if not settings.anthropic_api_key:
             raise ValueError("ANTHROPIC_API_KEY가 설정되지 않았습니다 (Haiku 호출용)")
 
-        self.youtube_api_key = settings.youtube_api_key
+        self.yt_client = YouTubeAPIClient()
         self.haiku_client = Anthropic(api_key=settings.anthropic_api_key)
 
     async def generate_recipes(self, payload: RecommendationCreate) -> list[Recipe]:
@@ -64,13 +55,23 @@ class YouTubeRecipeAdapter:
         queries = self._build_search_queries(payload)
         logger.info(f"YouTube 검색 쿼리: {queries}")
 
-        # 2. YouTube 검색
-        video_ids = await self._search_youtube(queries)
+        # 2. YouTube 검색 (공유 클라이언트 + 쿼터 추적)
+        seen_ids: set[str] = set()
+        video_ids: list[str] = []
+
+        async with httpx.AsyncClient(timeout=10) as client:
+            for query in queries:
+                ids = await self.yt_client.search(query, max_results=5, client=client)
+                for vid in ids:
+                    if vid not in seen_ids:
+                        seen_ids.add(vid)
+                        video_ids.append(vid)
+
         if not video_ids:
             raise ValueError("YouTube 검색 결과가 없습니다")
 
         # 3. 영상 상세 정보 조회
-        videos = await self._get_video_details(video_ids)
+        videos = await self.yt_client.get_video_details(video_ids)
         if not videos:
             raise ValueError("YouTube 영상 상세 정보를 가져올 수 없습니다")
 
@@ -104,84 +105,6 @@ class YouTubeRecipeAdapter:
 
         return queries
 
-    async def _search_youtube(self, queries: list[str], max_results_per_query: int = 5) -> list[str]:
-        """YouTube Data API v3 검색, 중복 제거된 video ID 반환"""
-        seen_ids: set[str] = set()
-        video_ids: list[str] = []
-
-        async with httpx.AsyncClient(timeout=10) as client:
-            for query in queries:
-                try:
-                    resp = await client.get(
-                        YOUTUBE_SEARCH_URL,
-                        params={
-                            "part": "snippet",
-                            "q": query,
-                            "type": "video",
-                            "maxResults": max_results_per_query,
-                            "relevanceLanguage": "ko",
-                            "regionCode": "KR",
-                            "order": "relevance",
-                            "key": self.youtube_api_key,
-                        },
-                    )
-                    resp.raise_for_status()
-                    data = resp.json()
-
-                    for item in data.get("items", []):
-                        vid = item["id"].get("videoId")
-                        if vid and vid not in seen_ids:
-                            seen_ids.add(vid)
-                            video_ids.append(vid)
-
-                except httpx.HTTPStatusError as e:
-                    logger.warning(f"YouTube 검색 실패 (쿼리: {query}): {e.response.status_code}")
-                    if e.response.status_code == 403:
-                        raise ValueError("YouTube API 할당량 초과 또는 API 키 오류") from e
-                except httpx.RequestError as e:
-                    logger.warning(f"YouTube 검색 네트워크 오류 (쿼리: {query}): {e}")
-
-        logger.info(f"YouTube 검색 완료: {len(video_ids)}개 영상 발견")
-        return video_ids
-
-    async def _get_video_details(self, video_ids: list[str]) -> list[VideoInfo]:
-        """videos.list API로 영상 설명, 조회수 등 상세 정보 조회"""
-        if not video_ids:
-            return []
-
-        # API는 최대 50개까지 한 번에 조회 가능
-        ids_str = ",".join(video_ids[:15])
-
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(
-                YOUTUBE_VIDEOS_URL,
-                params={
-                    "part": "snippet,statistics",
-                    "id": ids_str,
-                    "key": self.youtube_api_key,
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-
-        videos = []
-        for item in data.get("items", []):
-            snippet = item.get("snippet", {})
-            stats = item.get("statistics", {})
-
-            videos.append(
-                VideoInfo(
-                    video_id=item["id"],
-                    title=snippet.get("title", ""),
-                    description=snippet.get("description", ""),
-                    view_count=int(stats.get("viewCount", 0)),
-                    channel_title=snippet.get("channelTitle", ""),
-                )
-            )
-
-        logger.info(f"YouTube 상세 정보 조회 완료: {len(videos)}개")
-        return videos
-
     def _filter_and_rank(self, videos: list[VideoInfo], payload: RecommendationCreate) -> list[VideoInfo]:
         """영상을 관련성 + 인기도로 필터링/정렬"""
         exclude_set = expand_exclusions(payload.constraints.exclude)
@@ -197,18 +120,10 @@ class YouTubeRecipeAdapter:
 
             filtered.append(video)
 
-        # 레시피 관련성 점수 + 조회수로 정렬
-        recipe_keywords = ["레시피", "요리", "만들기", "만드는", "간단", "자취", "초간단", "백종원"]
-
         def score(v: VideoInfo) -> float:
             title_lower = v.title.lower()
-            # 레시피 키워드 매칭 점수
-            keyword_score = sum(1 for kw in recipe_keywords if kw in title_lower)
-            # 사용자 재료 매칭 점수
+            keyword_score = sum(1 for kw in RECIPE_KEYWORDS if kw in title_lower)
             ingredient_score = sum(1 for ing in payload.ingredients if ing in title_lower)
-            # 조회수 점수 (로그 스케일)
-            import math
-
             view_score = math.log10(max(v.view_count, 1))
             return keyword_score * 3 + ingredient_score * 5 + view_score
 

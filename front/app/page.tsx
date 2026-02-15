@@ -393,7 +393,7 @@ function HomePageContent() {
             <p className="text-xs text-muted-foreground">
               {qualityLevel === "fast" && "이미지 없이 빠르게 레시피를 추천해요"}
               {qualityLevel === "standard" && "AI 이미지와 함께 맞춤 레시피를 추천해요"}
-              {qualityLevel === "detailed" && "영양 정보, 대체 재료, 보관 팁까지 포함해요"}
+              {qualityLevel === "detailed" && "고품질 이미지, 영양 정보, 대체 재료, 보관 팁까지 포함해요"}
             </p>
           </div>
 

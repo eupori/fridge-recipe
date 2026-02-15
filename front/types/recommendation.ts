@@ -1,3 +1,11 @@
+export interface ReferenceVideo {
+  video_id: string;
+  title: string;
+  channel: string;
+  view_count: number;
+  thumbnail_url: string;
+}
+
 export interface Recipe {
   title: string;
   time_min: number;
@@ -19,6 +27,7 @@ export interface Recipe {
   } | null;
   substitutes?: string[];
   storage_tip?: string | null;
+  reference_video?: ReferenceVideo | null;
 }
 
 export interface ShoppingItem {

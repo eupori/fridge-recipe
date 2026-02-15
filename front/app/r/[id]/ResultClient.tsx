@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Clock, Users, ChefHat, ShoppingCart, Lightbulb, ChevronDown, ChevronUp, Check, ExternalLink, CircleCheck, Apple, ArrowLeftRight, Archive } from "lucide-react";
+import { Clock, Users, ChefHat, ShoppingCart, Lightbulb, ChevronDown, ChevronUp, Check, ExternalLink, CircleCheck, Apple, ArrowLeftRight, Archive, Youtube } from "lucide-react";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { ShareButton } from "@/components/ShareButton";
 import AdUnit from "@/components/AdUnit";
@@ -562,6 +562,39 @@ export default function ResultClient({ id }: { id: string }) {
                             보관 팁
                           </h4>
                           <p className="text-sm text-muted-foreground">{r.storage_tip}</p>
+                        </div>
+                      </>
+                    )}
+
+                    {/* 정밀 모드: 참고 YouTube 영상 */}
+                    {r.reference_video && (
+                      <>
+                        <Separator className="my-6" />
+                        <div className="space-y-3">
+                          <h4 className="font-semibold flex items-center gap-2">
+                            <Youtube className="w-4 h-4 text-red-500" />
+                            참고 영상
+                          </h4>
+                          <a
+                            href={`https://youtube.com/watch?v=${r.reference_video.video_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                          >
+                            <img
+                              src={r.reference_video.thumbnail_url}
+                              alt={r.reference_video.title}
+                              className="w-32 h-20 object-cover rounded"
+                              loading="lazy"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium line-clamp-2">{r.reference_video.title}</p>
+                              <p className="text-xs text-muted-foreground mt-1">{r.reference_video.channel}</p>
+                              <p className="text-xs text-muted-foreground">
+                                조회수 {r.reference_video.view_count.toLocaleString()}회
+                              </p>
+                            </div>
+                          </a>
                         </div>
                       </>
                     )}
