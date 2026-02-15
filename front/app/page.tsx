@@ -536,8 +536,8 @@ function HomePageContent() {
               <CardTitle className="text-lg">최근 검색</CardTitle>
             </div>
             {user && recentHistories.length > 0 && (
-              <Button variant="ghost" size="sm" asChild className="text-muted-foreground">
-                <Link href="/history">
+              <Button variant="ghost" size="sm" asChild className="text-muted-foreground whitespace-nowrap">
+                <Link href="/history" className="flex items-center">
                   전체 보기 <ChevronRight className="w-4 h-4 ml-1" />
                 </Link>
               </Button>
