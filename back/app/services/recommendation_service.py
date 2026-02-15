@@ -295,9 +295,9 @@ async def create_recommendation(
         image_results = [None] * len(recipes_raw)
     else:
         image_service = ImageSearchService(quality_level=quality)
-        # 정밀 모드: Gemini 이미지 생성이 ~13초 소요 → 넉넉한 타임아웃
+        # 정밀 모드: 퀄리티 우선, 시간 제한 없이 완료까지 대기 (gunicorn 120s 내)
         if quality == "detailed":
-            image_timeout = max(50 - llm_elapsed, 20)
+            image_timeout = max(90 - llm_elapsed, 45)
         else:
             image_timeout = max(28 - llm_elapsed, 5)
         logger.info(f"이미지 검색 시작: {len(recipes_raw)}개 레시피 (타임아웃: {image_timeout:.1f}초)")
