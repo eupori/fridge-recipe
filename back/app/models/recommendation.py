@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 from sqlalchemy import JSON, Column, DateTime, String
@@ -25,6 +26,7 @@ class Constraints(BaseModel):
     servings: int = Field(default=1, ge=1, le=6, description="인분 수")
     tools: list[str] = Field(default_factory=list, description="사용 가능한 조리 도구 목록")
     exclude: list[str] = Field(default_factory=list, description="제외할 재료 목록 (알레르기 등)")
+    quality_level: Literal["fast", "standard", "detailed"] = Field(default="standard", description="추천 품질")
 
 
 class RecommendationCreate(BaseModel):
@@ -56,6 +58,11 @@ class Recipe(BaseModel):
     tips: list[str] = Field(default_factory=list, description="조리 팁")
     warnings: list[str] = Field(default_factory=list, description="주의사항")
 
+    # 정밀 모드 전용 필드
+    nutrition: dict | None = Field(default=None, description="영양 정보 (칼로리, 단백질 등)")
+    substitutes: list[str] = Field(default_factory=list, description="대체 재료 제안")
+    storage_tip: str | None = Field(default=None, description="보관 팁")
+
 
 class ShoppingItem(BaseModel):
     """장보기 아이템"""
@@ -72,6 +79,7 @@ class RecommendationResponse(BaseModel):
 
     id: str = Field(description="추천 ID (rec_로 시작하는 고유 식별자)")
     created_at: datetime = Field(description="생성 일시")
+    quality_level: str = Field(default="standard", description="생성 시 사용된 품질 레벨")
     recipes: list[Recipe] = Field(
         description="추천된 레시피 목록 (정확히 3개)", min_length=3, max_length=3
     )

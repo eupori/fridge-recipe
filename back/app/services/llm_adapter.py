@@ -17,6 +17,95 @@ from app.models.recommendation import Recipe, RecommendationCreate
 logger = logging.getLogger(__name__)
 
 
+def parse_llm_response(content: str) -> list[dict]:
+    """Claude 응답을 파싱하여 레시피 데이터 추출 (공통 유틸)"""
+    try:
+        content = content.strip()
+
+        if "```json" in content:
+            start = content.find("```json") + 7
+            end = content.find("```", start)
+            json_str = content[start:end].strip()
+        elif "```" in content:
+            start = content.find("```") + 3
+            end = content.find("```", start)
+            json_str = content[start:end].strip()
+        else:
+            json_str = content
+
+        recipes_data = json.loads(json_str)
+
+        if not isinstance(recipes_data, list):
+            raise ValueError("응답이 배열 형태가 아닙니다")
+
+        return recipes_data
+
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON 파싱 실패: {str(e)}\n응답 내용: {content[:500]}")
+        raise ValueError(f"JSON 파싱 실패: {str(e)}") from e
+
+
+def fallback_dummy_recipes(payload: RecommendationCreate) -> list[Recipe]:
+    """API 실패 시 더미 레시피 반환 (공통 유틸)"""
+    logger.warning("폴백 더미 레시피 생성")
+    return [
+        Recipe(
+            title="간단 계란볶음밥",
+            time_min=10,
+            servings=payload.constraints.servings,
+            summary="냉장고 재료로 빠르게 만드는 볶음밥",
+            image_url=None,
+            ingredients_total=["밥", "계란", "간장", "참기름"],
+            ingredients_have=[],
+            ingredients_need=[],
+            steps=[
+                "팬에 기름을 두르고 계란을 볶는다",
+                "밥을 넣고 볶는다",
+                "간장과 참기름으로 간한다",
+                "그릇에 담아 완성",
+            ],
+            tips=["계란은 스크램블 형태로 먼저 볶으면 좋아요"],
+            warnings=[],
+        ),
+        Recipe(
+            title="간단 달걀국",
+            time_min=8,
+            servings=payload.constraints.servings,
+            summary="속 편한 국물 한 그릇",
+            image_url=None,
+            ingredients_total=["계란", "소금", "물"],
+            ingredients_have=[],
+            ingredients_need=[],
+            steps=[
+                "물을 끓인다",
+                "소금으로 간한다",
+                "계란을 풀어 넣는다",
+                "30초 두었다가 가볍게 저어 완성",
+            ],
+            tips=["다진마늘을 넣어도 좋아요"],
+            warnings=[],
+        ),
+        Recipe(
+            title="간단 김치볶음",
+            time_min=7,
+            servings=payload.constraints.servings,
+            summary="김치만 있으면 OK",
+            image_url=None,
+            ingredients_total=["김치", "참기름"],
+            ingredients_have=[],
+            ingredients_need=[],
+            steps=[
+                "김치를 먹기 좋게 자른다",
+                "팬에 참기름을 두른다",
+                "김치를 넣고 볶는다",
+                "간을 맞춰 완성",
+            ],
+            tips=["돼지고기를 추가하면 더 맛있어요"],
+            warnings=[],
+        ),
+    ]
+
+
 class RecipeLLMAdapter:
     """Claude API를 사용한 레시피 생성 어댑터"""
 
@@ -89,7 +178,7 @@ class RecipeLLMAdapter:
                 # 3. 응답 파싱
                 content = response.content[0].text
                 logger.debug(f"LLM 응답: {content[:200]}...")
-                recipes_data = self._parse_response(content)
+                recipes_data = parse_llm_response(content)
 
                 # 4. Pydantic 모델로 변환 (기본값으로 빈 리스트 제공)
                 recipes = []
@@ -123,12 +212,12 @@ class RecipeLLMAdapter:
                 if attempt == max_retries - 1:
                     # 최종 실패 시 더미 데이터 폴백
                     logger.error(f"LLM 생성 최종 실패, 더미 레시피 반환: {str(e)}")
-                    return self._fallback_dummy_recipes(payload)
+                    return fallback_dummy_recipes(payload)
                 # 재시도
                 continue
 
         # 여기까지 오면 안 되지만, 안전을 위해 더미 반환
-        return self._fallback_dummy_recipes(payload)
+        return fallback_dummy_recipes(payload)
 
     def _build_system_prompt(self) -> str:
         """시스템 프롬프트 생성"""
@@ -250,95 +339,235 @@ JSON 배열로 3개의 레시피를 반환합니다. 각 레시피는 다음 필
 
 JSON 배열 형식으로만 응답하세요."""
 
-    def _parse_response(self, content: str) -> list[dict]:
-        """Claude 응답을 파싱하여 레시피 데이터 추출"""
-        try:
-            # JSON 블록 추출 (```json ... ``` 형태일 수 있음)
-            content = content.strip()
+class QuickRecipeLLMAdapter:
+    """번개 모드: Haiku 사용, 간소화된 프롬프트, 빠른 응답"""
 
-            if "```json" in content:
-                start = content.find("```json") + 7
-                end = content.find("```", start)
-                json_str = content[start:end].strip()
-            elif "```" in content:
-                start = content.find("```") + 3
-                end = content.find("```", start)
-                json_str = content[start:end].strip()
-            else:
-                json_str = content
+    def __init__(self):
+        if not settings.anthropic_api_key:
+            raise ValueError("ANTHROPIC_API_KEY가 설정되지 않았습니다")
 
-            # JSON 파싱
-            recipes_data = json.loads(json_str)
+        self.client = Anthropic(api_key=settings.anthropic_api_key)
+        self.model = settings.haiku_model
+        self.temperature = 0.5
+        self.max_tokens = 1500
 
-            # 리스트가 아니면 에러
-            if not isinstance(recipes_data, list):
-                raise ValueError("응답이 배열 형태가 아닙니다")
+    def generate_recipes(self, payload: RecommendationCreate, max_retries: int = 1) -> list[Recipe]:
+        """빠른 레시피 생성 (Haiku, 재시도 1회)"""
+        for attempt in range(max_retries):
+            try:
+                system_prompt = self._build_system_prompt()
+                user_prompt = self._build_user_prompt(payload)
 
-            return recipes_data
+                logger.info(f"[번개] LLM 레시피 생성 시도 {attempt + 1}/{max_retries} (model={self.model})")
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": user_prompt}],
+                )
 
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON 파싱 실패: {str(e)}\n응답 내용: {content[:500]}")
-            raise ValueError(f"JSON 파싱 실패: {str(e)}") from e
+                content = response.content[0].text
+                recipes_data = parse_llm_response(content)
 
-    def _fallback_dummy_recipes(self, payload: RecommendationCreate) -> list[Recipe]:
-        """API 실패 시 더미 레시피 반환"""
-        logger.warning("폴백 더미 레시피 생성")
-        return [
-            Recipe(
-                title="간단 계란볶음밥",
-                time_min=10,
-                servings=payload.constraints.servings,
-                summary="냉장고 재료로 빠르게 만드는 볶음밥",
-                image_url=None,
-                ingredients_total=["밥", "계란", "간장", "참기름"],
-                ingredients_have=[],
-                ingredients_need=[],
-                steps=[
-                    "팬에 기름을 두르고 계란을 볶는다",
-                    "밥을 넣고 볶는다",
-                    "간장과 참기름으로 간한다",
-                    "그릇에 담아 완성",
-                ],
-                tips=["계란은 스크램블 형태로 먼저 볶으면 좋아요"],
-                warnings=[],
-            ),
-            Recipe(
-                title="간단 달걀국",
-                time_min=8,
-                servings=payload.constraints.servings,
-                summary="속 편한 국물 한 그릇",
-                image_url=None,
-                ingredients_total=["계란", "소금", "물"],
-                ingredients_have=[],
-                ingredients_need=[],
-                steps=[
-                    "물을 끓인다",
-                    "소금으로 간한다",
-                    "계란을 풀어 넣는다",
-                    "30초 두었다가 가볍게 저어 완성",
-                ],
-                tips=["다진마늘을 넣어도 좋아요"],
-                warnings=[],
-            ),
-            Recipe(
-                title="간단 김치볶음",
-                time_min=7,
-                servings=payload.constraints.servings,
-                summary="김치만 있으면 OK",
-                image_url=None,
-                ingredients_total=["김치", "참기름"],
-                ingredients_have=[],
-                ingredients_need=[],
-                steps=[
-                    "김치를 먹기 좋게 자른다",
-                    "팬에 참기름을 두른다",
-                    "김치를 넣고 볶는다",
-                    "간을 맞춰 완성",
-                ],
-                tips=["돼지고기를 추가하면 더 맛있어요"],
-                warnings=[],
-            ),
-        ]
+                recipes = []
+                for r in recipes_data:
+                    recipe = Recipe(
+                        title=r.get("title", "제목 없음"),
+                        time_min=r.get("time_min", 15),
+                        servings=r.get("servings", payload.constraints.servings),
+                        summary=r.get("summary", ""),
+                        image_url=None,
+                        ingredients_total=r.get("ingredients_total", []),
+                        ingredients_have=[],
+                        ingredients_need=[],
+                        steps=r.get("steps", []),
+                        tips=[],
+                        warnings=[],
+                    )
+                    recipes.append(recipe)
+
+                if len(recipes) != 3:
+                    raise ValueError(f"레시피 개수 오류: {len(recipes)}개 생성됨 (3개 필요)")
+
+                logger.info(f"[번개] 레시피 생성 성공: {len(recipes)}개")
+                return recipes
+
+            except Exception as e:
+                logger.warning(f"[번개] 생성 실패 (시도 {attempt + 1}/{max_retries}): {str(e)}")
+                if attempt == max_retries - 1:
+                    logger.error(f"[번개] 최종 실패, 더미 레시피 반환: {str(e)}")
+                    return fallback_dummy_recipes(payload)
+
+        return fallback_dummy_recipes(payload)
+
+    def _build_system_prompt(self) -> str:
+        return """당신은 한국 가정 요리 전문 셰프입니다. 빠르고 간단한 레시피를 만드세요.
+
+규칙:
+1. 정확히 3개의 레시피를 생성
+2. 각 레시피는 3-5개의 조리 단계
+3. 모든 텍스트는 한국어
+4. 시간 제한 내 완성 가능해야 함
+5. 제외 재료는 절대 사용 금지
+
+출력 형식: JSON 배열, 각 레시피:
+- title: 레시피 제목 (한국어, 15자 이내)
+- time_min: 조리 시간 (분)
+- servings: 인분
+- summary: 한 줄 설명
+- ingredients_total: 재료 목록 (재료명만, 분량 제외)
+- steps: 조리 단계 (3-5개)
+
+예시:
+[{"title": "김치볶음밥", "time_min": 10, "servings": 1, "summary": "간단 볶음밥", "ingredients_total": ["밥", "김치", "계란"], "steps": ["김치를 볶는다", "밥을 넣고 볶는다", "계란을 올린다"]}]
+
+JSON 배열만 출력하세요."""
+
+    def _build_user_prompt(self, payload: RecommendationCreate) -> str:
+        ingredients_str = ", ".join(payload.ingredients)
+        expanded_exclude = expand_exclusions(payload.constraints.exclude)
+        exclude_str = ", ".join(sorted(expanded_exclude)) if expanded_exclude else "없음"
+
+        return f"""재료: {ingredients_str}
+시간: {payload.constraints.time_limit_min}분 이내
+인분: {payload.constraints.servings}인분
+제외: {exclude_str}
+
+3개 레시피를 JSON 배열로 응답하세요."""
+
+
+class DetailedRecipeLLMAdapter:
+    """정밀 모드: Sonnet 사용, 영양정보/대체재료/보관팁 포함"""
+
+    def __init__(self):
+        if not settings.anthropic_api_key:
+            raise ValueError("ANTHROPIC_API_KEY가 설정되지 않았습니다")
+
+        self.client = Anthropic(api_key=settings.anthropic_api_key)
+        self.model = settings.llm_model
+        self.temperature = 0.7
+        self.max_tokens = 6000
+
+    def generate_recipes(self, payload: RecommendationCreate, max_retries: int = 2) -> list[Recipe]:
+        """정밀 레시피 생성 (영양정보, 대체재료, 보관팁 포함)"""
+        for attempt in range(max_retries):
+            try:
+                system_prompt = self._build_system_prompt()
+                user_prompt = self._build_user_prompt(payload)
+
+                logger.info(f"[정밀] LLM 레시피 생성 시도 {attempt + 1}/{max_retries} (model={self.model})")
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": user_prompt}],
+                )
+
+                content = response.content[0].text
+                recipes_data = parse_llm_response(content)
+
+                recipes = []
+                for r in recipes_data:
+                    recipe = Recipe(
+                        title=r.get("title", "제목 없음"),
+                        time_min=r.get("time_min", 15),
+                        servings=r.get("servings", payload.constraints.servings),
+                        summary=r.get("summary", ""),
+                        image_url=None,
+                        ingredients_total=r.get("ingredients_total", []),
+                        ingredients_have=[],
+                        ingredients_need=[],
+                        steps=r.get("steps", []),
+                        tips=r.get("tips", []),
+                        warnings=r.get("warnings", []),
+                        nutrition=r.get("nutrition"),
+                        substitutes=r.get("substitutes", []),
+                        storage_tip=r.get("storage_tip"),
+                    )
+                    recipes.append(recipe)
+
+                if len(recipes) != 3:
+                    raise ValueError(f"레시피 개수 오류: {len(recipes)}개 생성됨 (3개 필요)")
+
+                logger.info(f"[정밀] 레시피 생성 성공: {len(recipes)}개")
+                return recipes
+
+            except Exception as e:
+                logger.warning(f"[정밀] 생성 실패 (시도 {attempt + 1}/{max_retries}): {str(e)}")
+                if attempt == max_retries - 1:
+                    logger.error(f"[정밀] 최종 실패, 더미 레시피 반환: {str(e)}")
+                    return fallback_dummy_recipes(payload)
+
+        return fallback_dummy_recipes(payload)
+
+    def _build_system_prompt(self) -> str:
+        style = random.choice(RecipeLLMAdapter.COOKING_STYLES)
+        method = random.choice(RecipeLLMAdapter.COOKING_METHODS)
+
+        return f"""당신은 한국 가정 요리 전문 셰프이자 영양사입니다. 자취생과 1인 가구를 위한 상세한 레시피를 만드는 전문가입니다.
+
+규칙:
+1. 정확히 3개의 레시피를 생성해야 합니다
+2. 각 레시피는 6-10개의 상세한 조리 단계를 가져야 합니다
+3. 모든 텍스트는 한국어로 작성합니다
+4. 사용자가 지정한 시간 제한 내에 완성 가능해야 합니다
+5. 사용자가 제외한 재료는 절대 사용하지 않습니다
+6. 레시피 제목은 간결하고 매력적으로 작성합니다 (20자 이내)
+7. 각 조리 단계에 시간과 불 세기를 포함하세요 (예: "중불에서 2분간 볶아주세요")
+8. 각 레시피는 서로 다른 요리 스타일이어야 합니다
+9. {style} 스타일, {method} 형태를 고려해주세요
+10. 반드시 한 끼 식사로 먹을 수 있는 실제 요리만 추천
+
+추가 출력 필드 (정밀 모드):
+- nutrition: 영양 정보 객체 (calories, protein, carbs, fat)
+- substitutes: 대체 재료 제안 배열 (예: ["양파 대신 대파", "간장 대신 소금"])
+- storage_tip: 보관 팁 문자열 (예: "밀폐용기에 냉장 보관 시 2일")
+
+출력 형식:
+JSON 배열로 3개의 레시피를 반환합니다. 각 레시피는 다음 필드를 포함:
+- title: 레시피 제목 (한국어, 20자 이내)
+- time_min: 조리 시간 (분, 정수)
+- servings: 인분 (정수)
+- summary: 레시피 설명 (1-2문장, 50자 이내)
+- ingredients_total: 필요한 모든 재료 목록 (배열) - 재료명만 적고 분량/수량/수식어 제외
+- steps: 조리 단계 (6-10개, 시간/불 세기 포함)
+- tips: 조리 팁 (배열)
+- warnings: 주의사항 (배열)
+- nutrition: {{"calories": "약 350kcal", "protein": "15g", "carbs": "45g", "fat": "12g"}}
+- substitutes: ["양파 대신 대파", "간장 대신 소금"]
+- storage_tip: "밀폐용기에 냉장 보관 시 2일"
+
+중요: JSON 배열만 출력하고, 다른 설명이나 마크다운은 포함하지 마세요."""
+
+    def _build_user_prompt(self, payload: RecommendationCreate) -> str:
+        ingredients_str = ", ".join(payload.ingredients)
+        tools_str = (
+            ", ".join(payload.constraints.tools) if payload.constraints.tools else "모든 도구 가능"
+        )
+        expanded_exclude = expand_exclusions(payload.constraints.exclude)
+        exclude_str = ", ".join(sorted(expanded_exclude)) if expanded_exclude else "없음"
+
+        return f"""다음 조건으로 3개의 상세 레시피를 생성해주세요:
+
+재료: {ingredients_str}
+조리 시간 제한: {payload.constraints.time_limit_min}분 이내
+인분: {payload.constraints.servings}인분
+사용 가능 도구: {tools_str}
+제외 재료 (파생 재료 포함): {exclude_str}
+
+요구사항:
+1. 위 재료를 최대한 활용하되, 부족한 재료는 추가로 표시
+2. 각 레시피는 완전히 다른 종류와 조리법이어야 함
+3. 반드시 한 끼 식사로 먹을 수 있는 실제 요리만 추천
+4. 각 조리 단계에 시간과 불 세기를 구체적으로 명시
+5. 영양 정보(칼로리, 단백질, 탄수화물, 지방)를 포함
+6. 없는 재료의 대체 재료를 2-3개 제안
+7. 완성된 요리의 보관 방법과 기간을 명시
+8. 제외 재료는 어떤 형태로도 절대 사용 금지
+
+JSON 배열 형식으로만 응답하세요."""
 
 
 class MockRecipeLLMAdapter:

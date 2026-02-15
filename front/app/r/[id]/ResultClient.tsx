@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Clock, Users, ChefHat, ShoppingCart, Lightbulb, ChevronDown, ChevronUp, Plus, Check, ExternalLink, CircleCheck } from "lucide-react";
+import { Clock, Users, ChefHat, ShoppingCart, Lightbulb, ChevronDown, ChevronUp, Plus, Check, ExternalLink, CircleCheck, Apple, ArrowLeftRight, Archive } from "lucide-react";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { ShareButton } from "@/components/ShareButton";
 import AdUnit from "@/components/AdUnit";
@@ -74,6 +74,9 @@ export default function ResultClient({ id }: { id: string }) {
 
     const recipes = data.recipes;
     setRecipeImages(recipes.map((r: Recipe) => resolveImageUrl(r.image_url)));
+
+    // 번개 모드: 이미지 비동기 로드 스킵 (비용 절감)
+    if (data.quality_level === "fast") return;
 
     const missingRecipes = recipes
       .map((r: Recipe, i: number) => (!r.image_url ? { index: i, title: r.title } : null))
@@ -458,6 +461,67 @@ export default function ResultClient({ id }: { id: string }) {
                               </li>
                             ))}
                           </ul>
+                        </div>
+                      </>
+                    )}
+
+                    {/* 정밀 모드: 영양 정보 */}
+                    {r.nutrition && (
+                      <>
+                        <Separator className="my-6" />
+                        <div className="space-y-3">
+                          <h4 className="font-semibold flex items-center gap-2">
+                            <Apple className="w-4 h-4" />
+                            영양 정보
+                          </h4>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {[
+                              { label: "칼로리", value: r.nutrition.calories },
+                              { label: "단백질", value: r.nutrition.protein },
+                              { label: "탄수화물", value: r.nutrition.carbs },
+                              { label: "지방", value: r.nutrition.fat },
+                            ].map(({ label, value }) => (
+                              <div key={label} className="text-center p-2 rounded-lg bg-muted/50">
+                                <p className="text-xs text-muted-foreground">{label}</p>
+                                <p className="text-sm font-medium">{value}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {/* 정밀 모드: 대체 재료 */}
+                    {r.substitutes && r.substitutes.length > 0 && (
+                      <>
+                        <Separator className="my-6" />
+                        <div className="space-y-3">
+                          <h4 className="font-semibold flex items-center gap-2">
+                            <ArrowLeftRight className="w-4 h-4" />
+                            대체 재료
+                          </h4>
+                          <ul className="space-y-2">
+                            {r.substitutes.map((s: string, i: number) => (
+                              <li key={i} className="text-sm text-muted-foreground flex gap-2">
+                                <span className="text-primary">•</span>
+                                {s}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </>
+                    )}
+
+                    {/* 정밀 모드: 보관 팁 */}
+                    {r.storage_tip && (
+                      <>
+                        <Separator className="my-6" />
+                        <div className="space-y-3">
+                          <h4 className="font-semibold flex items-center gap-2">
+                            <Archive className="w-4 h-4" />
+                            보관 팁
+                          </h4>
+                          <p className="text-sm text-muted-foreground">{r.storage_tip}</p>
                         </div>
                       </>
                     )}

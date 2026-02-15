@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChefHat, Clock, Users, Utensils, Loader2, Package, History, RefreshCw, ChevronRight, User, SlidersHorizontal, ChevronDown, ChevronUp, AlertCircle, LogIn, X } from "lucide-react";
+import { ChefHat, Clock, Users, Utensils, Loader2, Package, History, RefreshCw, ChevronRight, User, SlidersHorizontal, ChevronDown, ChevronUp, AlertCircle, LogIn, X, Zap, Sparkles } from "lucide-react";
 import RecipeLoadingOverlay from "@/components/RecipeLoadingOverlay";
 import { Onboarding } from "@/components/Onboarding";
 import AdUnit from "@/components/AdUnit";
@@ -67,6 +67,7 @@ function HomePageContent() {
   const [timeLimit, setTimeLimit] = usePersistedState("recipe-time-limit", 15);
   const [servings, setServings] = usePersistedState("recipe-servings", 1);
   const [tools, setTools] = usePersistedState<string[]>("recipe-tools", ["프라이팬"]);
+  const [qualityLevel, setQualityLevel] = usePersistedState("recipe-quality", "standard");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pantryItems, setPantryItems] = useState<string[]>([]);
@@ -150,6 +151,7 @@ function HomePageContent() {
           servings: history.servings,
           tools,
           exclude: [],
+          quality_level: qualityLevel,
         },
       });
       if (rec._dailyRemaining !== undefined) {
@@ -193,6 +195,7 @@ function HomePageContent() {
           servings,
           tools,
           exclude,
+          quality_level: qualityLevel,
         },
       });
 
@@ -213,7 +216,7 @@ function HomePageContent() {
     } finally {
       setLoading(false);
     }
-  }, [excludeText, ingredients, timeLimit, servings, tools]);
+  }, [excludeText, ingredients, timeLimit, servings, tools, qualityLevel]);
 
   // autoSearch 파라미터가 있으면 자동으로 검색 실행
   useEffect(() => {
@@ -244,7 +247,7 @@ function HomePageContent() {
   return (
     <main className="container max-w-3xl mx-auto py-10 px-4">
       <Onboarding />
-      <RecipeLoadingOverlay loading={loading} />
+      <RecipeLoadingOverlay loading={loading} qualityLevel={qualityLevel} />
       <div className="text-center mb-8">
         <div className="flex items-center justify-center gap-2 mb-4">
           <ChefHat className="w-10 h-10 text-primary" />
@@ -360,6 +363,42 @@ function HomePageContent() {
             </div>
           </div>
 
+          {/* 추천 방식 세그먼트 컨트롤 */}
+          <div className="space-y-2">
+            <Label className="text-sm">추천 방식</Label>
+            <div className="bg-muted rounded-lg p-1 flex gap-1" role="radiogroup" aria-label="추천 방식 선택">
+              {([
+                { value: "fast" as const, icon: Zap, label: "번개", time: "~5초" },
+                { value: "standard" as const, icon: ChefHat, label: "기본", time: "~20초" },
+                { value: "detailed" as const, icon: Sparkles, label: "정밀", time: "~30초" },
+              ]).map(({ value, icon: Icon, label, time }) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={qualityLevel === value}
+                  aria-label={`${label} 모드 (${time})`}
+                  onClick={() => setQualityLevel(value)}
+                  disabled={loading}
+                  className={`flex-1 flex flex-col items-center gap-0.5 py-2 px-2 rounded-md text-sm font-medium transition-all ${
+                    qualityLevel === value
+                      ? "bg-card shadow-sm text-foreground ring-1 ring-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span>{label}</span>
+                  <span className="text-xs font-normal">{time}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {qualityLevel === "fast" && "이미지 없이 빠르게 레시피를 추천해요"}
+              {qualityLevel === "standard" && "AI 이미지와 함께 맞춤 레시피를 추천해요"}
+              {qualityLevel === "detailed" && "영양 정보, 대체 재료, 보관 팁까지 포함해요"}
+            </p>
+          </div>
+
           <button
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
@@ -427,7 +466,7 @@ function HomePageContent() {
                       className="mt-2 h-8"
                       asChild
                     >
-                      <Link href="/login">
+                      <Link href="/login" className="inline-flex items-center">
                         <LogIn className="w-3.5 h-3.5 mr-1.5" />
                         로그인하기
                       </Link>

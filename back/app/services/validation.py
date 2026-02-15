@@ -31,5 +31,13 @@ def validate_response(resp: RecommendationResponse, req: RecommendationCreate) -
             if e and e in text_blob:
                 raise ValueError(f"exclude_ingredient_detected: {e}")
 
-        if not (4 <= len(r.steps) <= 8):
+        quality = req.constraints.quality_level
+        if quality == "fast":
+            valid_steps = 2 <= len(r.steps) <= 8
+        elif quality == "detailed":
+            valid_steps = 4 <= len(r.steps) <= 12
+        else:
+            valid_steps = 4 <= len(r.steps) <= 8
+
+        if not valid_steps:
             raise ValueError("steps_length_invalid")

@@ -10,6 +10,15 @@ export interface Recipe {
   steps: string[];
   tips: string[];
   warnings: string[];
+  // 정밀 모드 전용 필드
+  nutrition?: {
+    calories: string;
+    protein: string;
+    carbs: string;
+    fat: string;
+  } | null;
+  substitutes?: string[];
+  storage_tip?: string | null;
 }
 
 export interface ShoppingItem {
@@ -23,6 +32,7 @@ export interface ShoppingItem {
 export interface Recommendation {
   id: string;
   created_at: string;
+  quality_level?: string;
   recipes: Recipe[];
   shopping_list: ShoppingItem[];
 }

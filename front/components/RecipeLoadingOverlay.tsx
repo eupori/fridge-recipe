@@ -1,14 +1,22 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ChefHat, Lightbulb } from "lucide-react";
+import { ChefHat, Lightbulb, Zap } from "lucide-react";
 
-const STAGES = [
-  { until: 3, message: "YouTube에서 인기 레시피 검색 중...", progress: 15 },
-  { until: 6, message: "인기 영상에서 레시피 정보 분석 중...", progress: 35 },
-  { until: 10, message: "맞춤 레시피 구성 중...", progress: 55 },
-  { until: 15, message: "레시피 이미지 생성 중...", progress: 75 },
+const STANDARD_STAGES = [
+  { until: 3, message: "AI가 재료 조합을 분석 중...", progress: 15 },
+  { until: 8, message: "맞춤 레시피를 구성 중...", progress: 35 },
+  { until: 13, message: "레시피 이미지 생성 중...", progress: 55 },
+  { until: 18, message: "장보기 리스트 정리 중...", progress: 75 },
   { until: Infinity, message: "거의 다 됐어요! 마무리 중...", progress: 90 },
+];
+
+const DETAILED_STAGES = [
+  { until: 3, message: "재료 데이터베이스 분석 중...", progress: 10 },
+  { until: 8, message: "영양 성분 계산 중...", progress: 30 },
+  { until: 14, message: "맞춤 레시피 조합 중...", progress: 50 },
+  { until: 20, message: "레시피 이미지 생성 중...", progress: 70 },
+  { until: Infinity, message: "대체 재료와 보관 팁 정리 중...", progress: 90 },
 ];
 
 const COOKING_TIPS = [
@@ -40,7 +48,12 @@ function getRandomTip(exclude: number): number {
   return next;
 }
 
-export default function RecipeLoadingOverlay({ loading }: { loading: boolean }) {
+interface RecipeLoadingOverlayProps {
+  loading: boolean;
+  qualityLevel?: string;
+}
+
+export default function RecipeLoadingOverlay({ loading, qualityLevel = "standard" }: RecipeLoadingOverlayProps) {
   const [elapsed, setElapsed] = useState(0);
   const [tipIndex, setTipIndex] = useState(() => Math.floor(Math.random() * COOKING_TIPS.length));
   const [tipFading, setTipFading] = useState(false);
@@ -81,7 +94,20 @@ export default function RecipeLoadingOverlay({ loading }: { loading: boolean }) 
 
   if (!loading) return null;
 
-  const stage = STAGES.find((s) => elapsed < s.until) ?? STAGES[STAGES.length - 1];
+  // 번개 모드: 간소화된 오버레이
+  if (qualityLevel === "fast") {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm" role="alert" aria-live="assertive">
+        <div className="flex flex-col items-center gap-4 px-6 text-center">
+          <Zap className="w-12 h-12 text-primary animate-pulse" />
+          <p className="text-lg font-medium text-foreground">번개 레시피 생성 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const stages = qualityLevel === "detailed" ? DETAILED_STAGES : STANDARD_STAGES;
+  const stage = stages.find((s) => elapsed < s.until) ?? stages[stages.length - 1];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm" role="alert" aria-live="assertive">

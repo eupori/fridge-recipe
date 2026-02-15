@@ -3,6 +3,7 @@ type Constraints = {
   servings: number;
   tools: string[];
   exclude: string[];
+  quality_level?: string;
 };
 
 export type RecommendationCreate = {

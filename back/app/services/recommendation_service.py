@@ -22,7 +22,12 @@ from app.models.recommendation import (
 )
 from app.services.coupang_service import CoupangLinkService
 from app.services.image_search_service import ImageSearchService
-from app.services.llm_adapter import MockRecipeLLMAdapter, RecipeLLMAdapter
+from app.services.llm_adapter import (
+    DetailedRecipeLLMAdapter,
+    MockRecipeLLMAdapter,
+    QuickRecipeLLMAdapter,
+    RecipeLLMAdapter,
+)
 from app.services.validation import validate_response
 from app.services.youtube_adapter import YouTubeRecipeAdapter
 
@@ -38,6 +43,7 @@ def build_cache_key(payload: RecommendationCreate) -> str:
         "time_limit": payload.constraints.time_limit_min,
         "servings": payload.constraints.servings,
         "exclude": sorted(e.strip().lower() for e in payload.constraints.exclude),
+        "quality": payload.constraints.quality_level,
     }
     raw = json.dumps(parts, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(raw.encode()).hexdigest()
@@ -223,12 +229,27 @@ async def create_recommendation(
         logger.info(f"캐시에서 레시피 반환: ID={new_id} (캐시키={cache_key[:12]}...)")
         return cloned
 
-    # 1. 레시피 생성 어댑터 선택 (youtube → anthropic → mock)
+    # 1. 레시피 생성 어댑터 선택 (quality_level별 분기)
     provider = settings.recipe_provider
-    logger.info(f"레시피 Provider: {provider}")
+    quality = payload.constraints.quality_level
+    logger.info(f"레시피 Provider: {provider}, Quality: {quality}")
 
     if provider == "mock":
         recipes_raw = MockRecipeLLMAdapter().generate_recipes(payload)
+    elif quality == "fast":
+        # 번개 모드: Haiku 직접 호출
+        try:
+            recipes_raw = QuickRecipeLLMAdapter().generate_recipes(payload)
+        except Exception as e:
+            logger.warning(f"[번개] Haiku 실패, 더미 레시피 반환: {e}")
+            recipes_raw = MockRecipeLLMAdapter().generate_recipes(payload)
+    elif quality == "detailed":
+        # 정밀 모드: Sonnet 강화 프롬프트
+        try:
+            recipes_raw = DetailedRecipeLLMAdapter().generate_recipes(payload)
+        except Exception as e:
+            logger.warning(f"[정밀] Sonnet 실패, 기본 어댑터 폴백: {e}")
+            recipes_raw = RecipeLLMAdapter().generate_recipes(payload)
     elif provider == "youtube":
         try:
             recipes_raw = await YouTubeRecipeAdapter().generate_recipes(payload)
@@ -246,21 +267,23 @@ async def create_recommendation(
     llm_elapsed = time.monotonic() - start_time
     logger.info(f"레시피 생성 완료: {llm_elapsed:.1f}초 (provider={provider})")
 
-    # 3. 이미지 검색 서비스 초기화
-    image_service = ImageSearchService()
-
-    # 4. 이미지 병렬 검색 (API Gateway 30초 제한 대비 동적 타임아웃)
-    image_timeout = max(28 - llm_elapsed, 5)
-    logger.info(f"이미지 검색 시작: {len(recipes_raw)}개 레시피 (타임아웃: {image_timeout:.1f}초)")
-    image_tasks = [image_service.get_image(recipe.title) for recipe in recipes_raw]
-    try:
-        image_results = await asyncio.wait_for(
-            asyncio.gather(*image_tasks, return_exceptions=True),
-            timeout=image_timeout,
-        )
-    except asyncio.TimeoutError:
-        logger.warning(f"이미지 생성 타임아웃 ({image_timeout:.1f}초 초과), 이미지 없이 진행")
+    # 3. 이미지 처리 (번개 모드는 완전 스킵)
+    if quality == "fast":
+        logger.info("[번개] 이미지 스킵")
         image_results = [None] * len(recipes_raw)
+    else:
+        image_service = ImageSearchService()
+        image_timeout = max(28 - llm_elapsed, 5)
+        logger.info(f"이미지 검색 시작: {len(recipes_raw)}개 레시피 (타임아웃: {image_timeout:.1f}초)")
+        image_tasks = [image_service.get_image(recipe.title) for recipe in recipes_raw]
+        try:
+            image_results = await asyncio.wait_for(
+                asyncio.gather(*image_tasks, return_exceptions=True),
+                timeout=image_timeout,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"이미지 생성 타임아웃 ({image_timeout:.1f}초 초과), 이미지 없이 진행")
+            image_results = [None] * len(recipes_raw)
 
     # 5. ingredients_have, ingredients_need 분리 + 이미지 URL 추가
     final_recipes = []
@@ -287,6 +310,9 @@ async def create_recommendation(
             steps=recipe.steps,
             tips=recipe.tips or [],
             warnings=recipe.warnings or [],
+            nutrition=recipe.nutrition,
+            substitutes=recipe.substitutes or [],
+            storage_tip=recipe.storage_tip,
         )
         final_recipes.append(final_recipe)
 
@@ -310,7 +336,11 @@ async def create_recommendation(
     # 5. 응답 객체 생성
     rec_id = f"rec_{uuid4().hex[:10]}"
     response = RecommendationResponse(
-        id=rec_id, created_at=datetime.now(UTC), recipes=final_recipes, shopping_list=shopping_list
+        id=rec_id,
+        created_at=datetime.now(UTC),
+        quality_level=quality,
+        recipes=final_recipes,
+        shopping_list=shopping_list,
     )
 
     # 6. 검증 (LLM 출력이 규칙 만족하는지 확인)
@@ -330,10 +360,11 @@ async def create_recommendation(
         logger.warning(f"캐시 저장 실패 (무시): {e}")
 
     # 9. 비용 추정 로깅
-    llm_costs = {"anthropic": 0.015, "youtube": 0.005, "mock": 0.0}
+    llm_costs = {"anthropic": 0.035, "youtube": 0.010, "mock": 0.0}
+    quality_llm_overrides = {"fast": 0.007, "detailed": 0.065}
     image_provider = settings.image_search_provider.lower()
     img_costs_per = {"gemini": 0.039, "google": 0.005, "unsplash": 0.0, "mock": 0.0}
-    llm_cost = llm_costs.get(provider, 0.015)
+    llm_cost = quality_llm_overrides.get(quality, llm_costs.get(provider, 0.015))
     num_images = sum(1 for r in final_recipes if r.image_url)
     img_cost = img_costs_per.get(image_provider, 0.0) * num_images
     total_cost = llm_cost + img_cost
