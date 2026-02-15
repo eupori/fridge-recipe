@@ -295,7 +295,11 @@ async def create_recommendation(
         image_results = [None] * len(recipes_raw)
     else:
         image_service = ImageSearchService(quality_level=quality)
-        image_timeout = max(28 - llm_elapsed, 5)
+        # 정밀 모드: Gemini 이미지 생성이 ~13초 소요 → 넉넉한 타임아웃
+        if quality == "detailed":
+            image_timeout = max(50 - llm_elapsed, 20)
+        else:
+            image_timeout = max(28 - llm_elapsed, 5)
         logger.info(f"이미지 검색 시작: {len(recipes_raw)}개 레시피 (타임아웃: {image_timeout:.1f}초)")
         image_tasks = [image_service.get_image(recipe.title) for recipe in recipes_raw]
 
@@ -339,7 +343,8 @@ async def create_recommendation(
 
         # 이미지 검색 실패 처리
         if isinstance(img_result, Exception):
-            logger.error(f"이미지 검색 실패 ({recipe.title}): {img_result}")
+            err_type = type(img_result).__name__
+            logger.error(f"이미지 검색 실패 ({recipe.title}): [{err_type}] {img_result}")
             img_url = None
         else:
             img_url = img_result
