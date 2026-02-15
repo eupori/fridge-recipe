@@ -34,10 +34,10 @@ export default function AdUnit({ slot, format = "auto", className }: AdUnitProps
   }, []);
 
   return (
-    <div className={className} ref={containerRef}>
+    <div className={`overflow-hidden ${className ?? ""}`} ref={containerRef}>
       <ins
         className="adsbygoogle"
-        style={{ display: "block", minHeight: "50px" }}
+        style={{ display: "block", minHeight: "50px", maxWidth: "100%" }}
         data-ad-client="ca-pub-4539589433798899"
         data-ad-slot={slot}
         data-ad-format={format}
