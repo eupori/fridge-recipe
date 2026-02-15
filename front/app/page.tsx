@@ -32,13 +32,13 @@ function HomePageLoading() {
       <div className="text-center mb-8">
         <div className="flex items-center justify-center gap-2 mb-4">
           <ChefHat className="w-10 h-10 text-primary" />
-          <h1 className="text-4xl font-bold">냉장고 재료만 알려주세요</h1>
+          <h1 className="text-4xl font-bold">오머먹</h1>
         </div>
         <p className="text-2xl font-semibold text-primary mb-2">
-          15분 레시피를 만들어드려요
+          냉장고 열면, 답 나온다
         </p>
         <p className="text-muted-foreground">
-          AI가 당신의 재료로 만들 수 있는 레시피 3개와 장보기 리스트를 자동으로 정리해줍니다
+          냉장고 재료만 입력하면 AI가 15분 레시피 3개와 장보기 리스트를 만들어드려요
         </p>
       </div>
       <Card className="shadow-lg">
@@ -250,13 +250,13 @@ function HomePageContent() {
       <div className="text-center mb-8">
         <div className="flex items-center justify-center gap-2 mb-4">
           <ChefHat className="w-10 h-10 text-primary" />
-          <h1 className="text-4xl font-bold">냉장고 재료만 알려주세요</h1>
+          <h1 className="text-4xl font-bold">오머먹</h1>
         </div>
         <p className="text-2xl font-semibold text-primary mb-2">
-          15분 레시피를 만들어드려요
+          냉장고 열면, 답 나온다
         </p>
         <p className="text-muted-foreground">
-          AI가 당신의 재료로 만들 수 있는 레시피 3개와 장보기 리스트를 자동으로 정리해줍니다
+          냉장고 재료만 입력하면 AI가 15분 레시피 3개와 장보기 리스트를 만들어드려요
         </p>
         {stats && (
           <p className="text-sm text-muted-foreground mt-3">

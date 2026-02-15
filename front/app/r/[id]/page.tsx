@@ -22,18 +22,18 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     const firstImage = resolveImageUrl(data.recipes?.[0]?.image_url);
 
     return {
-      title: `${titles} | 냉장고 레시피`,
-      description: `냉장고 재료로 만드는 15분 레시피: ${titles}`,
+      title: `${titles} | 오머먹`,
+      description: `오머먹 - 냉장고 재료로 만드는 15분 레시피: ${titles}`,
       openGraph: {
         title: titles,
-        description: `냉장고 재료로 만드는 15분 레시피: ${titles}`,
+        description: `오머먹 - 냉장고 재료로 만드는 15분 레시피: ${titles}`,
         ...(firstImage ? { images: [firstImage] } : {}),
       },
     };
   } catch {
     return {
-      title: "추천 레시피 | 냉장고 레시피",
-      description: "AI가 추천한 냉장고 재료 기반 레시피",
+      title: "추천 레시피 | 오머먹",
+      description: "오머먹 - AI가 추천한 냉장고 파먹기 레시피",
     };
   }
 }

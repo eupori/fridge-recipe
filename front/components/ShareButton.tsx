@@ -64,7 +64,7 @@ export function ShareButton({ title, text, url, imageUrl }: ShareButtonProps) {
       objectType: "feed",
       content: {
         title,
-        description: text || "냉장고 재료로 만드는 15분 레시피",
+        description: text || "오머먹 - 냉장고 파먹기 레시피",
         imageUrl: imageUrl || "https://recipe.eupori.dev/og-image.png",
         link: { mobileWebUrl: shareUrl, webUrl: shareUrl },
       },

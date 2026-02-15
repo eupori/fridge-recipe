@@ -42,7 +42,7 @@ export function Navbar() {
           {/* 로고 */}
           <Link href="/" className="flex items-center gap-2 font-bold text-lg hover:opacity-80 transition-opacity">
             <ChefHat className="w-6 h-6" />
-            <span className="hidden sm:inline">냉장고 레시피</span>
+            <span className="hidden sm:inline">오머먹</span>
           </Link>
 
           {/* 네비게이션 링크 & 인증 */}
