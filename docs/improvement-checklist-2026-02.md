@@ -20,16 +20,16 @@
 
 ## MEDIUM — SEO/마케팅
 
-- [ ] **SEO — JSON-LD 구조화 데이터 없음** `ResultClient.tsx`
+- [x] **SEO — JSON-LD 구조화 데이터 없음** `r/[id]/page.tsx` — Recipe 스키마 추가
 - [ ] **SEO — OG 이미지 없음** `layout.tsx`
 - [x] **SEO — Twitter 카드 태그 누락** `r/[id]/page.tsx` — twitter 메타 추가
 - [x] **SEO — canonical 링크 없음** `r/[id]/page.tsx` — alternates.canonical 추가
 
 ## MEDIUM — 성능
 
-- [ ] **성능 — React.memo 미적용** `ShareButton.tsx`, `FavoriteButton.tsx`
-- [ ] **성능 — 이미지 캐시 크기 제한 없음** `image_search_service.py`
-- [ ] **성능 — 통계 API 캐싱 없음** `page.tsx:90-94`
+- [x] **성능 — React.memo 미적용** `ShareButton.tsx`, `FavoriteButton.tsx` — memo() 래핑
+- [x] **성능 — 이미지 캐시 크기 제한 없음** `image_search_service.py` — LRU 1000항목 이미 구현됨
+- [x] **성능 — 통계 API 캐싱 없음** `stats.py` — 60초 TTL 인메모리 캐싱 추가
 - [x] **성능 — Nginx gzip 미설정** — gzip on 추가
 - [x] **성능 — DB 인덱스 누락** `favorite.py` — recommendation_id 인덱스 추가
 
@@ -45,7 +45,7 @@
 
 - [x] **접근성 — 재료 색상 구분만 사용** `ResultClient.tsx:352-364` — 텍스트 라벨 강화 + aria-hidden
 - [x] **접근성 — 조리 단계 키보드 조작 불가** `ResultClient.tsx:470` — role=checkbox, Enter/Space 지원
-- [ ] **접근성 — 폼 라벨 미연결** `page.tsx:437-445`
+- [x] **접근성 — 폼 라벨 미연결** `page.tsx:437-445` — id/aria-labelledby 추가
 
 ## MEDIUM — 코드 품질
 
@@ -58,14 +58,14 @@
 ## MEDIUM — 인프라
 
 - [ ] **인프라 — 배포 롤백 전략 없음** `deploy-backend.yml`
-- [ ] **인프라 — Docker 빌드 캐시 비활성**
+- [x] **인프라 — Docker 빌드 캐시 비활성** `deploy-backend.yml` — --no-cache 제거, BuildKit 활성화
 - [x] **인프라 — Docker non-root 실행 안 함** `Dockerfile` — appuser 생성 및 적용
 - [ ] **인프라 — 요청 ID 추적 없음**
 - [ ] **모니터링 — CloudWatch 알람 없음**
 
 ## LOW (여유 시 개선)
 
-- [ ] **UX — 히스토리 로딩 스켈레톤 없음**
+- [x] **UX — 히스토리 로딩 스켈레톤 없음** — 3개 카드 스켈레톤 추가
 - [ ] **UX — 팬트리 삭제 Undo 없음**
 - [ ] **UX — 모바일 로고 텍스트 숨김** `Navbar.tsx:45`
 - [ ] **성능 — Sentry Session Replay 비활성**
@@ -79,6 +79,6 @@
 |---------|------|------|------|
 | **CRITICAL** | 4 | 4 | 0 |
 | **HIGH** | 8 | 7 | 1 |
-| **MEDIUM** | 27 | 17 | 10 |
-| **LOW** | 7 | 1 | 6 |
-| **합계** | **46** | **29** | **17** |
+| **MEDIUM** | 27 | 24 | 3 |
+| **LOW** | 7 | 2 | 5 |
+| **합계** | **46** | **37** | **9** |

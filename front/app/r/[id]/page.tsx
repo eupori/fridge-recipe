@@ -43,6 +43,47 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   }
 }
 
-export default function ResultPage({ params }: { params: { id: string } }) {
-  return <ResultClient id={params.id} />;
+async function getRecipeData(id: string) {
+  try {
+    const res = await fetch(`${API_BASE}/recommendations/${id}`, { cache: "no-store" });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export default async function ResultPage({ params }: { params: { id: string } }) {
+  const data = await getRecipeData(params.id);
+
+  // JSON-LD 구조화 데이터
+  const jsonLd = data?.recipes?.map((r: { title: string; summary?: string; time_min?: number; servings?: number; image_url?: string | null; ingredients_total?: string[]; steps?: string[] }) => ({
+    "@context": "https://schema.org",
+    "@type": "Recipe",
+    name: r.title,
+    description: r.summary || `${r.title} - 오머먹 AI 추천 레시피`,
+    ...(r.time_min ? { totalTime: `PT${r.time_min}M` } : {}),
+    ...(r.servings ? { recipeYield: `${r.servings}인분` } : {}),
+    ...(r.image_url ? { image: resolveImageUrl(r.image_url) } : {}),
+    recipeIngredient: r.ingredients_total || [],
+    recipeInstructions: (r.steps || []).map((step: string, i: number) => ({
+      "@type": "HowToStep",
+      position: i + 1,
+      text: step,
+    })),
+    author: { "@type": "Organization", name: "오머먹" },
+  })) || [];
+
+  return (
+    <>
+      {jsonLd.map((ld: object, i: number) => (
+        <script
+          key={i}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }}
+        />
+      ))}
+      <ResultClient id={params.id} />
+    </>
+  );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ function formatLikeCount(count: number): string {
   return count.toString();
 }
 
-export function FavoriteButton({ recommendationId, recipeIndex, recipeTitle, recipeImageUrl, likeCount = 0, onFavoriteChange }: Props) {
+export const FavoriteButton = memo(function FavoriteButton({ recommendationId, recipeIndex, recipeTitle, recipeImageUrl, likeCount = 0, onFavoriteChange }: Props) {
   const { user } = useAuth();
   const router = useRouter();
   const [isFavorite, setIsFavorite] = useState(false);
@@ -104,4 +104,4 @@ export function FavoriteButton({ recommendationId, recipeIndex, recipeTitle, rec
       )}
     </div>
   );
-}
+});

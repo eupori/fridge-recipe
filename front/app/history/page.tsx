@@ -80,7 +80,34 @@ export default function HistoryPage() {
   if (authLoading || loading) {
     return (
       <main className="container max-w-3xl mx-auto py-10 px-4">
-        <p className="text-muted-foreground">불러오는 중...</p>
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-2">
+            <History className="w-6 h-6 shrink-0" />
+            <h1 className="text-2xl sm:text-3xl font-bold">최근 검색 기록</h1>
+          </div>
+          <p className="text-sm text-muted-foreground">최근 7일간의 검색 기록입니다</p>
+        </div>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="overflow-hidden">
+              <CardContent className="p-0">
+                <div className="animate-pulse px-4 pt-4 pb-2">
+                  <div className="h-5 bg-muted rounded w-3/4 mb-2" />
+                  <div className="h-3 bg-muted rounded w-1/3" />
+                </div>
+                <div className="animate-pulse grid grid-cols-3 gap-px bg-border mx-4 my-2 rounded-lg overflow-hidden">
+                  {[1, 2, 3].map((j) => (
+                    <div key={j} className="bg-muted aspect-[2/1]" />
+                  ))}
+                </div>
+                <div className="animate-pulse flex gap-2 px-4 pb-4 pt-2">
+                  <div className="h-8 bg-muted rounded w-24" />
+                  <div className="h-8 bg-muted rounded w-24" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </main>
     );
   }

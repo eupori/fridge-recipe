@@ -413,11 +413,11 @@ function HomePageContent() {
           {showAdvanced && (
             <div className="space-y-4 pt-2 border-t">
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
+                <Label id="tools-label" className="flex items-center gap-2">
                   <Utensils className="w-4 h-4" />
                   조리도구
                 </Label>
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2 flex-wrap" role="group" aria-labelledby="tools-label">
                   {["프라이팬", "전자레인지", "에어프라이어", "냄비", "오븐", "상관없음"].map((t) => (
                     <Button
                       key={t}

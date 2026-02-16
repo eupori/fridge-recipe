@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { memo, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Share2, Check, MessageCircle } from "lucide-react";
 
@@ -32,7 +32,7 @@ function initKakao() {
   return window.Kakao.isInitialized();
 }
 
-export function ShareButton({ title, text, url, imageUrl }: ShareButtonProps) {
+export const ShareButton = memo(function ShareButton({ title, text, url, imageUrl }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
 
   const handleShare = async () => {
@@ -103,4 +103,4 @@ export function ShareButton({ title, text, url, imageUrl }: ShareButtonProps) {
       </Button>
     </div>
   );
-}
+});
