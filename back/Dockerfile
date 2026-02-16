@@ -14,6 +14,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY app ./app
 
+# Create non-root user
+RUN useradd -r -s /bin/false appuser && chown -R appuser:appuser /app
+USER appuser
+
 ENV PYTHONPATH="/app"
 
 EXPOSE 8000

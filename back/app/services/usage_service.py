@@ -31,26 +31,45 @@ class UsageService:
         return max(0, settings.guest_daily_limit - usage.count)
 
     def increment(self, ip_address: str) -> int:
-        """사용 횟수 증가 후 남은 횟수 반환"""
-        usage = (
-            self.db.query(GuestUsage)
-            .filter(
-                GuestUsage.ip_address == ip_address,
-                GuestUsage.usage_date == date.today(),
-            )
-            .first()
-        )
-        if not usage:
-            usage = GuestUsage(
+        """사용 횟수 증가 후 남은 횟수 반환 (UPSERT로 레이스 컨디션 방지)"""
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+        from sqlalchemy import update
+
+        try:
+            # PostgreSQL UPSERT
+            stmt = pg_insert(GuestUsage).values(
                 ip_address=ip_address,
                 usage_date=date.today(),
                 count=1,
+            ).on_conflict_do_update(
+                constraint="uq_guest_usage_ip_date",
+                set_={"count": GuestUsage.count + 1},
             )
-            self.db.add(usage)
-        else:
-            usage.count += 1
-        self.db.commit()
-        return max(0, settings.guest_daily_limit - usage.count)
+            self.db.execute(stmt)
+            self.db.commit()
+        except Exception:
+            # SQLite 폴백 (개발환경)
+            self.db.rollback()
+            usage = (
+                self.db.query(GuestUsage)
+                .filter(
+                    GuestUsage.ip_address == ip_address,
+                    GuestUsage.usage_date == date.today(),
+                )
+                .first()
+            )
+            if not usage:
+                usage = GuestUsage(
+                    ip_address=ip_address,
+                    usage_date=date.today(),
+                    count=1,
+                )
+                self.db.add(usage)
+            else:
+                usage.count += 1
+            self.db.commit()
+
+        return self.get_remaining(ip_address)
 
     def check_limit(self, ip_address: str) -> bool:
         """제한 초과 여부 (True = 사용 가능)"""

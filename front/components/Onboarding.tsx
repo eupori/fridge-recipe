@@ -38,6 +38,16 @@ export function Onboarding() {
     }
   }, []);
 
+  // ESC 키로 닫기
+  useEffect(() => {
+    if (!show) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [show]);
+
   const close = () => {
     setShow(false);
     try {

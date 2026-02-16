@@ -1,14 +1,8 @@
 import type { Metadata } from "next";
+import { resolveImageUrl } from "@/lib/api";
 import ResultClient from "./ResultClient";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000/api/v1";
-const API_ROOT = API_BASE.replace(/\/api\/v\d+$/, "");
-
-function resolveImageUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  if (url.startsWith("/static/")) return `${API_ROOT}${url}`;
-  return url;
-}
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   try {
@@ -21,12 +15,23 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     const titles = data.recipes?.map((r: { title: string }) => r.title).join(", ") ?? "";
     const firstImage = resolveImageUrl(data.recipes?.[0]?.image_url);
 
+    const description = `오머먹 - 냉장고 재료로 만드는 15분 레시피: ${titles}`;
+    const url = `https://eupori.dev/r/${params.id}`;
+
     return {
       title: `${titles} | 오머먹`,
-      description: `오머먹 - 냉장고 재료로 만드는 15분 레시피: ${titles}`,
+      description,
+      alternates: { canonical: url },
       openGraph: {
         title: titles,
-        description: `오머먹 - 냉장고 재료로 만드는 15분 레시피: ${titles}`,
+        description,
+        url,
+        ...(firstImage ? { images: [firstImage] } : {}),
+      },
+      twitter: {
+        card: firstImage ? "summary_large_image" : "summary",
+        title: `${titles} | 오머먹`,
+        description,
         ...(firstImage ? { images: [firstImage] } : {}),
       },
     };

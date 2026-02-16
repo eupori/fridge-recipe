@@ -82,7 +82,8 @@ async def post_recommendations(
     """
     # 비로그인 사용자 일일 사용량 체크
     usage_service = UsageService(db)
-    client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown").split(",")[0].strip()
+    # Nginx가 설정하는 X-Real-IP 헤더 사용 (X-Forwarded-For는 스푸핑 가능)
+    client_ip = request.headers.get("x-real-ip", request.client.host if request.client else "unknown").strip()
     remaining = None
 
     if not current_user:
