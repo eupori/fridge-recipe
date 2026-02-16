@@ -29,11 +29,20 @@ connect_args = {}
 if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
     connect_args["check_same_thread"] = False
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args=connect_args,
-    pool_pre_ping=True,  # 연결 상태 확인
-)
+engine_kwargs = {
+    "connect_args": connect_args,
+    "pool_pre_ping": True,  # 연결 상태 확인
+}
+
+# PostgreSQL 연결 풀링 최적화 (Supabase Session Pooler 사용 시)
+if not SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
+    engine_kwargs.update({
+        "pool_size": 5,
+        "max_overflow": 10,
+        "pool_recycle": 300,  # 5분마다 연결 갱신
+    })
+
+engine = create_engine(SQLALCHEMY_DATABASE_URL, **engine_kwargs)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
