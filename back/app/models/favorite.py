@@ -23,7 +23,7 @@ class Favorite(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
-    recommendation_id = Column(String(50), nullable=False)
+    recommendation_id = Column(String(50), nullable=False, index=True)
     recipe_index = Column(Integer, nullable=False)  # 0, 1, 2
     recipe_title = Column(String(200), nullable=False)  # 캐시용
     recipe_image_url = Column(String(500), nullable=True)  # 캐시용

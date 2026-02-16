@@ -83,16 +83,16 @@ export function ShareButton({ title, text, url, imageUrl }: ShareButtonProps) {
         variant="ghost"
         size="sm"
         onClick={handleKakaoShare}
-        className="h-8 w-8 p-0"
+        className="h-9 w-9 p-0"
         title="카카오톡 공유"
       >
-        <MessageCircle className="w-4 h-4" />
+        <MessageCircle className="w-[18px] h-[18px]" />
       </Button>
       <Button
         variant="ghost"
         size="sm"
         onClick={handleShare}
-        className="h-8 w-8 p-0"
+        className="h-9 w-9 p-0"
         title="공유하기"
       >
         {copied ? (

@@ -473,11 +473,14 @@ function HomePageContent() {
                 ) : (
                   <>
                     <p className="text-sm font-medium text-destructive mb-1">
-                      {error.includes("timeout") || error.includes("시간")
-                        ? "요청 시간이 초과되었습니다"
-                        : error.includes("network") || error.includes("fetch")
-                        ? "네트워크 연결을 확인해주세요"
-                        : "요청에 실패했습니다"}
+                      {(() => {
+                        const msg = error.toLowerCase();
+                        if (msg.includes("timeout") || msg.includes("시간") || msg.includes("timed out"))
+                          return "요청 시간이 초과되었습니다";
+                        if (msg.includes("network") || msg.includes("fetch") || msg.includes("failed to fetch") || msg.includes("연결"))
+                          return "네트워크 연결을 확인해주세요";
+                        return "요청에 실패했습니다";
+                      })()}
                     </p>
                     <p className="text-xs text-destructive/80">{error}</p>
                     <Button
@@ -600,7 +603,7 @@ function HomePageContent() {
       <AdUnit slot="4339934057" className="my-6" />
 
       {/* 모바일 하단 고정 CTA (BottomNav 위) */}
-      <div className="fixed bottom-14 left-0 right-0 p-4 bg-background/95 backdrop-blur-sm border-t sm:hidden z-30">
+      <div className="fixed bottom-14 left-0 right-0 p-4 bg-background/95 backdrop-blur-sm border-t sm:hidden z-30" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}>
         <Button
           onClick={onSubmit}
           disabled={loading || ingredients.length === 0}

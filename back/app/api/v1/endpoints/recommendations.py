@@ -80,19 +80,33 @@ async def post_recommendations(
     - 각 레시피는 보유 재료와 구매 필요 재료로 분리됨
     - 통합된 장보기 리스트 (중복 제거됨)
     """
-    # 비로그인 사용자 일일 사용량 체크
+    # 사용량 체크
     usage_service = UsageService(db)
     # Nginx가 설정하는 X-Real-IP 헤더 사용 (X-Forwarded-For는 스푸핑 가능)
     client_ip = request.headers.get("x-real-ip", request.client.host if request.client else "unknown").strip()
     remaining = None
 
-    if not current_user:
+    if current_user:
+        # 로그인 사용자 일일 제한 (user_id 기반)
+        user_key = f"user:{current_user.id}"
+        remaining = usage_service.get_remaining(user_key, limit=settings.user_daily_limit)
+        if remaining <= 0:
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "detail": f"일일 이용 횟수({settings.user_daily_limit}회)를 초과했습니다. 내일 다시 이용해주세요!",
+                    "remaining": 0,
+                },
+                headers={"X-Daily-Remaining": "0"},
+            )
+    else:
+        # 비로그인 사용자 일일 제한 (IP 기반)
         remaining = usage_service.get_remaining(client_ip)
         if remaining <= 0:
             return JSONResponse(
                 status_code=429,
                 content={
-                    "detail": "일일 무료 이용 횟수를 초과했습니다. 로그인하면 무제한으로 이용할 수 있어요!",
+                    "detail": "일일 무료 이용 횟수를 초과했습니다. 로그인하면 더 많이 이용할 수 있어요!",
                     "remaining": 0,
                 },
                 headers={"X-Daily-Remaining": "0"},
@@ -101,8 +115,11 @@ async def post_recommendations(
     try:
         response = await create_recommendation(payload, db)
 
-        # 비로그인 사용자 사용량 증가
-        if not current_user:
+        # 사용량 증가
+        if current_user:
+            user_key = f"user:{current_user.id}"
+            remaining = usage_service.increment(user_key, limit=settings.user_daily_limit)
+        else:
             remaining = usage_service.increment(client_ip)
 
         # 로그인 사용자의 경우 검색 기록 저장

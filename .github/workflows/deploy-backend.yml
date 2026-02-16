@@ -26,3 +26,18 @@ jobs:
             docker compose build --no-cache
             docker compose up -d
             docker image prune -f
+
+      - name: Health check
+        run: |
+          sleep 10
+          for i in 1 2 3; do
+            STATUS=$(curl -sf -o /dev/null -w "%{http_code}" https://recipe-api.eupori.dev/health || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Attempt $i: HTTP $STATUS, retrying..."
+            sleep 5
+          done
+          echo "Health check failed after 3 attempts"
+          exit 1

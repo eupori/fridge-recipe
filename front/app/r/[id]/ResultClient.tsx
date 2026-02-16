@@ -349,16 +349,16 @@ export default function ResultClient({ id }: { id: string }) {
 
                     <div className="space-y-1 text-sm">
                       <div className="flex gap-2 min-w-0">
-                        <span className="w-2 h-2 bg-green-500 rounded-full mt-1.5 shrink-0" />
+                        <span className="w-2 h-2 bg-green-500 rounded-full mt-1.5 shrink-0" aria-hidden="true" />
                         <span className="text-muted-foreground truncate">
-                          보유: {(r.ingredients_have || []).slice(0, 3).join(", ") || "-"}
+                          <span className="font-medium text-green-600 dark:text-green-400">보유</span>: {(r.ingredients_have || []).slice(0, 3).join(", ") || "-"}
                           {(r.ingredients_have || []).length > 3 && ` 외 ${r.ingredients_have.length - 3}개`}
                         </span>
                       </div>
                       <div className="flex gap-2 min-w-0">
-                        <span className="w-2 h-2 bg-orange-500 rounded-full mt-1.5 shrink-0" />
+                        <span className="w-2 h-2 bg-orange-500 rounded-full mt-1.5 shrink-0" aria-hidden="true" />
                         <span className="text-muted-foreground truncate">
-                          추가: {(r.ingredients_need || []).slice(0, 3).join(", ") || "없음"}
+                          <span className="font-medium text-orange-600 dark:text-orange-400">추가</span>: {(r.ingredients_need || []).slice(0, 3).join(", ") || "없음"}
                           {(r.ingredients_need || []).length > 3 && ` 외 ${r.ingredients_need.length - 3}개`}
                         </span>
                       </div>
@@ -467,8 +467,12 @@ export default function ResultClient({ id }: { id: string }) {
                           return (
                             <li
                               key={i}
+                              role="checkbox"
+                              aria-checked={isDone}
+                              tabIndex={0}
                               className="flex gap-3 cursor-pointer group"
                               onClick={() => toggleStep(idx, i)}
+                              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleStep(idx, i); } }}
                             >
                               <Badge
                                 variant={isDone ? "default" : "outline"}
