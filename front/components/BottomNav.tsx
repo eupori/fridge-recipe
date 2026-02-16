@@ -2,17 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Package, Heart, User } from "lucide-react";
-
-const tabs = [
-  { href: "/", icon: Home, label: "홈" },
-  { href: "/pantry", icon: Package, label: "보유재료" },
-  { href: "/favorites", icon: Heart, label: "즐겨찾기" },
-  { href: "/login", icon: User, label: "내정보" },
-];
+import { Home, Package, Heart, User, LogIn } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 
 export function BottomNav() {
   const pathname = usePathname();
+  const { user } = useAuth();
+
+  const tabs = [
+    { href: "/", icon: Home, label: "홈" },
+    { href: "/pantry", icon: Package, label: "보유재료" },
+    { href: "/favorites", icon: Heart, label: "즐겨찾기" },
+    user
+      ? { href: "/history", icon: User, label: "내정보" }
+      : { href: "/login", icon: LogIn, label: "로그인" },
+  ];
 
   return (
     <nav
