@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { resolveImageUrl } from "@/lib/api";
 import ResultClient from "./ResultClient";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000/api/v1";
+const API_BASE = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1`;
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   try {
