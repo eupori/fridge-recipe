@@ -11,6 +11,7 @@ from app.models.recommendation import (
 from app.models.search_history import SearchHistoryCreate
 from app.models.user import User
 from app.services.auth_service import get_current_user_optional
+from app.services.ingredient_validator import validate_ingredients
 from app.services.recommendation_service import create_recommendation, get_recommendation
 from app.services.search_history_service import SearchHistoryService
 from app.services.usage_service import UsageService
@@ -80,6 +81,15 @@ async def post_recommendations(
     - 각 레시피는 보유 재료와 구매 필요 재료로 분리됨
     - 통합된 장보기 리스트 (중복 제거됨)
     """
+    # 재료 검증 (비식품/위험 재료 차단)
+    blocked = validate_ingredients(payload.ingredients)
+    if blocked:
+        blocked_str = ", ".join(blocked)
+        raise HTTPException(
+            status_code=400,
+            detail=f"식품이 아닌 재료가 포함되어 있습니다: {blocked_str}. 먹을 수 있는 재료만 입력해주세요.",
+        )
+
     # 사용량 체크
     usage_service = UsageService(db)
     # Nginx가 설정하는 X-Real-IP 헤더 사용 (X-Forwarded-For는 스푸핑 가능)
@@ -147,7 +157,19 @@ async def post_recommendations(
             headers=headers,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        msg = str(e)
+        user_msg = {
+            "recipes_must_be_3": "레시피 생성에 실패했습니다. 다시 시도해주세요.",
+            "time_limit_exceeded": "시간 제한 내에 만들 수 있는 레시피를 찾지 못했습니다.",
+            "steps_length_invalid": "레시피 생성에 실패했습니다. 다시 시도해주세요.",
+        }.get(msg)
+        if user_msg is None:
+            if "exclude_ingredient_detected" in msg:
+                ingredient = msg.split(": ", 1)[-1] if ": " in msg else ""
+                user_msg = f"제외 재료({ingredient})가 포함된 레시피가 생성되었습니다. 다시 시도해주세요."
+            else:
+                user_msg = "레시피 생성에 실패했습니다. 다시 시도해주세요."
+        raise HTTPException(status_code=400, detail=user_msg) from e
 
 
 @router.get(

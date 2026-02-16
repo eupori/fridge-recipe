@@ -21,23 +21,54 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ec2-user/apps/fridge-recipe
+
+            # 롤백용 현재 커밋 저장
+            PREV_COMMIT=$(git rev-parse HEAD)
+            echo "Current commit: $PREV_COMMIT"
+
             git pull origin master
             cd back
             DOCKER_BUILDKIT=1 docker compose build
             docker compose up -d
+
+            # 컨테이너 내부 헬스체크 (10초 대기 후 3회 시도)
+            sleep 10
+            HEALTHY=false
+            for i in 1 2 3; do
+              STATUS=$(curl -sf -o /dev/null -w "%{http_code}" http://localhost:8000/health 2>/dev/null || echo "000")
+              if [ "$STATUS" = "200" ]; then
+                HEALTHY=true
+                echo "Internal health check passed"
+                break
+              fi
+              echo "Attempt $i: HTTP $STATUS, retrying..."
+              sleep 5
+            done
+
+            if [ "$HEALTHY" = "false" ]; then
+              echo "Health check failed — rolling back to $PREV_COMMIT"
+              cd /home/ec2-user/apps/fridge-recipe
+              git checkout $PREV_COMMIT -- back/
+              cd back
+              DOCKER_BUILDKIT=1 docker compose build
+              docker compose up -d
+              echo "Rollback complete"
+              exit 1
+            fi
+
             docker image prune -f
 
-      - name: Health check
+      - name: External health check
         run: |
-          sleep 10
+          sleep 5
           for i in 1 2 3; do
             STATUS=$(curl -sf -o /dev/null -w "%{http_code}" https://recipe-api.eupori.dev/health || echo "000")
             if [ "$STATUS" = "200" ]; then
-              echo "Health check passed"
+              echo "External health check passed"
               exit 0
             fi
             echo "Attempt $i: HTTP $STATUS, retrying..."
             sleep 5
           done
-          echo "Health check failed after 3 attempts"
+          echo "External health check failed after 3 attempts"
           exit 1

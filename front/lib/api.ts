@@ -133,8 +133,9 @@ export async function createRecommendation(payload: RecommendationCreate) {
   const remaining = res.headers.get("X-Daily-Remaining");
 
   if (!res.ok) {
-    const t = await res.text();
-    throw new Error(t || `HTTP ${res.status}`);
+    const data = await res.json().catch(() => null);
+    const msg = data?.detail || `HTTP ${res.status}`;
+    throw new Error(msg);
   }
 
   const result = await res.json();

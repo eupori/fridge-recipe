@@ -43,3 +43,4 @@ back/params.json
 
 # Build cache
 front/tsconfig.tsbuildinfo
+.vercel
