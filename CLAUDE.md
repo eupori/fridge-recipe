@@ -163,6 +163,7 @@ GET /api/v1/recommendations/{id}
 | `back/app/services/recommendation_service.py` | **레시피 생성 로직** |
 | `back/app/services/usage_service.py` | 비로그인 사용량 체크/증가 서비스 |
 | `back/app/services/validation.py` | 응답 검증 규칙 |
+| `back/app/services/ingredient_validator.py` | 재료 입력 검증 (비식품 차단) |
 | `back/app/api/v1/endpoints/recommendations.py` | 추천 API 엔드포인트 (게이팅 포함) |
 | `back/app/api/v1/endpoints/stats.py` | 공개 통계 엔드포인트 |
 
@@ -174,6 +175,7 @@ GET /api/v1/recommendations/{id}
 | `front/app/r/[id]/page.tsx` | 레시피 결과 페이지 (동적 라우트) |
 | `front/app/r/[id]/ResultClient.tsx` | 결과 페이지 클라이언트 (레시피 카드, 장보기 리스트, 쇼핑몰 선택) |
 | `front/app/history/page.tsx` | 검색 기록 페이지 (이미지 썸네일 카드) |
+| `front/app/opengraph-image.tsx` | OG 이미지 자동 생성 (Edge Runtime) |
 | `front/lib/api.ts` | 중앙화된 API 클라이언트 함수 |
 | `front/components/TagInput.tsx` | 태그/칩 기반 재료 입력 컴포넌트 |
 | `front/components/Navbar.tsx` | 네비게이션 바 + 다크 모드 토글 |
@@ -275,12 +277,19 @@ RecommendationCreate:
 - [x] ✅ 장보기 리스트 쇼핑몰 선택 (쿠팡/네이버쇼핑 토글, 브랜드 컬러, `localStorage` 영속)
 - [x] ✅ 재료 퍼지 매칭 (`split_have_need`에서 `normalize_ingredient` 활용)
 - [x] ✅ 검색 기록 페이지 리디자인 (레시피 이미지 썸네일, 구조화된 카드)
+- [x] ✅ OG 이미지 자동 생성 (`opengraph-image.tsx`, Edge Runtime, 1200x630)
+- [x] ✅ JSON-LD 구조화 데이터 (Schema.org Recipe, `r/[id]/page.tsx`)
+- [x] ✅ 에러 메시지 한국어 통일 (백엔드 에러 코드 → 한국어 매핑)
+- [x] ✅ 배포 롤백 전략 (헬스체크 실패 시 이전 커밋으로 자동 롤백)
+- [x] ✅ 재료 입력 검증 (비식품/위험 재료 블록리스트 + LLM 프롬프트 방어)
+- [x] ✅ React.memo 최적화 (FavoriteButton, ShareButton)
 
 ### 계획된 기능
 
 - [ ] 테스트 인프라 (현재 기본 테스트만 존재)
 - [ ] 레시피 평가
 - [ ] Google Analytics 연동
+- [ ] AdSense 수동 광고 단위 (트래픽 확보 후)
 
 ### 배포 구성
 
@@ -478,3 +487,9 @@ git log --oneline -10
 18. **장보기 리스트 쇼핑몰:** `ResultClient.tsx`의 `SHOPPING_MALLS` 상수에 브랜드 컬러(`toggleActive`, `purchaseClass`) 포함. 쿠팡 `#E44232`, 네이버 `#03C75A`. 상태 색상과 브랜드 색상 충돌 주의 (보유 상태는 뉴트럴 톤 사용)
 19. **로딩 → 페이지 전환:** `onSubmit`에서 성공 시 `setLoading(false)` 호출 금지. `router.push()` 후 컴포넌트 언마운트로 자연스럽게 해제. `catch`에서만 `setLoading(false)`
 20. **TagInput:** `usePersistedState`와 호환 (comma-separated string). `front/components/TagInput.tsx`
+21. **metadataBase 필수:** `front/app/layout.tsx`에 `metadataBase: new URL("https://eupori.dev")` 설정. 없으면 OG 이미지 등 메타데이터 URL이 `localhost:3000`으로 생성됨
+22. **HTTPException detail 파싱:** FastAPI `HTTPException`은 `{"detail": "message"}` JSON 반환. 프론트에서 `res.json().detail`로 파싱해야 함 (`res.text()`는 JSON 원문 그대로 표시)
+23. **재료 검증:** `ingredient_validator.py`가 비식품 재료(독버섯, 금속, 화학물질 등)를 블록리스트+패턴으로 차단. LLM 호출 전에 `recommendations.py`에서 실행됨. LLM 프롬프트에도 방어 규칙 추가 (3중 방어)
+24. **배포 롤백:** `deploy-backend.yml`에서 배포 전 커밋 해시 저장 → 내부 헬스체크 실패 시 `git checkout $PREV_COMMIT -- back/` + 재빌드로 자동 롤백
+25. **AdSense + SPA:** 자동 광고는 CSR 페이지에서 콘텐츠 분석 실패 가능. 트래픽 확보 후 수동 광고 단위(`<ins class="adsbygoogle">`) 삽입 필요
+26. **Docker 권한:** Dockerfile에서 비root 사용자(`appuser`) 사용 시, 쓰기 필요한 디렉토리(`/app/data/images/`)는 `USER appuser` 전에 `mkdir + chown` 필수
