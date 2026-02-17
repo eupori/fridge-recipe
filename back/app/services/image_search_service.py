@@ -487,12 +487,15 @@ garnished with fresh herbs, steam rising from the dish."""
                 r'\["(https?://[^"]+\.(?:jpg|jpeg|png|webp)(?:\?[^"]*)?)"',
                 resp.text,
             )
-            # Google 자체 이미지 제외
+            # Google 자체 이미지 및 핫링크 차단 도메인 제외
             urls = [
                 u for u in urls
                 if "gstatic.com" not in u
                 and "google.com" not in u
                 and "googleapis.com" not in u
+                and "pstatic.net" not in u      # 네이버 블로그 핫링크 차단
+                and "daumcdn.net" not in u      # 다음/카카오 핫링크 차단
+                and "tistorycdn.com" not in u   # 티스토리 핫링크 차단
             ]
 
             if urls:
@@ -617,16 +620,24 @@ garnished with fresh herbs, steam rising from the dish."""
                 # Imagen 모델: generate_images 사용 (유료 계정 필요)
                 # 레퍼런스 이미지는 Imagen에서 미지원, 텍스트 전용 프롬프트 사용
                 text_only_prompt = self._build_prompt(query, has_reference=False)
-                response = await loop.run_in_executor(
-                    None,
-                    lambda: client.models.generate_images(
-                        model=self.model,
-                        prompt=text_only_prompt,
-                        config=types.GenerateImagesConfig(
-                            number_of_images=1,
+                gemini_timeout = 60.0 if self.quality_level == "detailed" else 15.0
+                try:
+                    response = await asyncio.wait_for(
+                        loop.run_in_executor(
+                            None,
+                            lambda: client.models.generate_images(
+                                model=self.model,
+                                prompt=text_only_prompt,
+                                config=types.GenerateImagesConfig(
+                                    number_of_images=1,
+                                ),
+                            ),
                         ),
-                    ),
-                )
+                        timeout=gemini_timeout,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(f"Gemini Imagen API 타임아웃 ({gemini_timeout}초): '{query}'")
+                    return None
 
                 if response.generated_images and len(response.generated_images) > 0:
                     image = response.generated_images[0].image
@@ -661,14 +672,22 @@ garnished with fresh herbs, steam rising from the dish."""
                 else:
                     contents = prompt
 
-                response = await loop.run_in_executor(
-                    None,
-                    lambda: client.models.generate_content(
-                        model=self.model,
-                        contents=contents,
-                        config=types.GenerateContentConfig(response_modalities=["TEXT", "IMAGE"]),
-                    ),
-                )
+                gemini_timeout = 60.0 if self.quality_level == "detailed" else 15.0
+                try:
+                    response = await asyncio.wait_for(
+                        loop.run_in_executor(
+                            None,
+                            lambda: client.models.generate_content(
+                                model=self.model,
+                                contents=contents,
+                                config=types.GenerateContentConfig(response_modalities=["TEXT", "IMAGE"]),
+                            ),
+                        ),
+                        timeout=gemini_timeout,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(f"Gemini API 타임아웃 ({gemini_timeout}초): '{query}'")
+                    return None
 
                 if response.candidates and response.candidates[0].content.parts:
                     for part in response.candidates[0].content.parts:

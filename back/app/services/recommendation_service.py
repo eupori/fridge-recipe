@@ -344,7 +344,7 @@ async def create_recommendation(
         # 이미지 검색 실패 처리
         if isinstance(img_result, Exception):
             err_type = type(img_result).__name__
-            logger.error(f"이미지 검색 실패 ({recipe.title}): [{err_type}] {img_result}")
+            logger.warning(f"이미지 검색 실패 ({recipe.title}): [{err_type}] {img_result}")
             img_url = None
         else:
             img_url = img_result
