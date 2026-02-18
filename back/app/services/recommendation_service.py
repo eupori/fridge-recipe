@@ -257,32 +257,42 @@ async def create_recommendation(
     if provider == "mock":
         recipes_raw = MockRecipeLLMAdapter().generate_recipes(payload)
     elif quality == "fast":
-        # 번개 모드: Haiku 직접 호출
+        # 번개 모드: Haiku 직접 호출 (subprocess → to_thread)
         try:
-            recipes_raw = QuickRecipeLLMAdapter().generate_recipes(payload)
+            recipes_raw = await asyncio.to_thread(
+                QuickRecipeLLMAdapter().generate_recipes, payload
+            )
         except Exception as e:
             logger.warning(f"[번개] Haiku 실패, 더미 레시피 반환: {e}")
             recipes_raw = MockRecipeLLMAdapter().generate_recipes(payload)
     elif quality == "detailed":
-        # 정밀 모드: Sonnet 강화 프롬프트
+        # 정밀 모드: Sonnet 강화 프롬프트 (subprocess → to_thread)
         try:
-            recipes_raw = DetailedRecipeLLMAdapter().generate_recipes(payload)
+            recipes_raw = await asyncio.to_thread(
+                DetailedRecipeLLMAdapter().generate_recipes, payload
+            )
         except Exception as e:
             logger.warning(f"[정밀] Sonnet 실패, 기본 어댑터 폴백: {e}")
-            recipes_raw = RecipeLLMAdapter().generate_recipes(payload)
+            recipes_raw = await asyncio.to_thread(
+                RecipeLLMAdapter().generate_recipes, payload
+            )
     elif provider == "youtube":
         try:
             recipes_raw = await YouTubeRecipeAdapter().generate_recipes(payload)
         except Exception as e:
             logger.warning(f"YouTube+Haiku 실패, Sonnet 폴백: {e}")
             try:
-                recipes_raw = RecipeLLMAdapter().generate_recipes(payload)
+                recipes_raw = await asyncio.to_thread(
+                    RecipeLLMAdapter().generate_recipes, payload
+                )
             except Exception as e2:
                 logger.error(f"Sonnet 폴백도 실패, 더미 레시피 반환: {e2}")
                 recipes_raw = MockRecipeLLMAdapter().generate_recipes(payload)
     else:
-        # anthropic (기존 동작)
-        recipes_raw = RecipeLLMAdapter().generate_recipes(payload)
+        # anthropic (기존 동작, subprocess → to_thread)
+        recipes_raw = await asyncio.to_thread(
+            RecipeLLMAdapter().generate_recipes, payload
+        )
 
     llm_elapsed = time.monotonic() - start_time
     logger.info(f"레시피 생성 완료: {llm_elapsed:.1f}초 (provider={provider})")

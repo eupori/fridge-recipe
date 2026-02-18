@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     # Sentry
     sentry_dsn: str = ""
 
+    # Claude Code CLI (headless mode)
+    claude_binary: str = "claude"
+    claude_subprocess_timeout: int = 120
+
     # Gemini (이미지 생성용) - 유료 계정 필요
     gemini_api_key: str | None = None
     # 옵션: gemini-2.0-flash-exp-image-generation (기본), imagen-4.0-generate-001 (유료 전용)

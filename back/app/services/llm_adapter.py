@@ -1,5 +1,5 @@
 """
-LLM 어댑터 - Claude API를 사용한 레시피 생성
+LLM 어댑터 - Claude Code CLI 헤드리스 모드를 사용한 레시피 생성
 """
 
 from __future__ import annotations
@@ -7,14 +7,64 @@ from __future__ import annotations
 import json
 import logging
 import random
-
-from anthropic import Anthropic
+import shutil
+import subprocess
 
 from app.core.config import settings
 from app.data.allergen_derivatives import expand_exclusions
 from app.models.recommendation import Recipe, RecommendationCreate
 
 logger = logging.getLogger(__name__)
+
+
+def _call_claude_cli(system_prompt: str, user_prompt: str, model: str, timeout: int | None = None) -> str:
+    """Claude Code CLI 헤드리스 모드로 LLM 호출
+
+    Args:
+        system_prompt: 시스템 프롬프트
+        user_prompt: 사용자 프롬프트
+        model: 모델명 (sonnet, haiku 등)
+        timeout: 타임아웃 (초)
+
+    Returns:
+        LLM 응답 텍스트
+
+    Raises:
+        RuntimeError: CLI 실행 실패 시
+    """
+    binary = settings.claude_binary
+    if not shutil.which(binary):
+        raise RuntimeError(f"Claude Code CLI를 찾을 수 없습니다: {binary}")
+
+    if timeout is None:
+        timeout = settings.claude_subprocess_timeout
+
+    cmd = [
+        binary, "-p", user_prompt,
+        "--system-prompt", system_prompt,
+        "--output-format", "text",
+        "--max-turns", "1",
+        "--model", model,
+        "--no-session-persistence",
+    ]
+
+    logger.info(f"Claude CLI 호출: model={model}, timeout={timeout}s")
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+    if result.returncode != 0:
+        stderr = result.stderr.strip()[:500] if result.stderr else "(no stderr)"
+        raise RuntimeError(f"Claude CLI 실패 (exit={result.returncode}): {stderr}")
+
+    output = result.stdout.strip()
+    if not output:
+        raise RuntimeError("Claude CLI 응답이 비어있습니다")
+
+    return output
 
 
 def parse_llm_response(content: str) -> list[dict]:
@@ -107,7 +157,7 @@ def fallback_dummy_recipes(payload: RecommendationCreate) -> list[Recipe]:
 
 
 class RecipeLLMAdapter:
-    """Claude API를 사용한 레시피 생성 어댑터"""
+    """Claude Code CLI를 사용한 레시피 생성 어댑터"""
 
     # 다양성을 위한 요리 스타일 리스트
     COOKING_STYLES = [
@@ -137,13 +187,7 @@ class RecipeLLMAdapter:
     ]
 
     def __init__(self):
-        if not settings.anthropic_api_key:
-            raise ValueError("ANTHROPIC_API_KEY가 설정되지 않았습니다")
-
-        self.client = Anthropic(api_key=settings.anthropic_api_key)
-        self.model = settings.llm_model
-        self.temperature = settings.llm_temperature
-        self.max_tokens = settings.llm_max_tokens
+        self.model = "sonnet"
 
     def generate_recipes(self, payload: RecommendationCreate, max_retries: int = 2) -> list[Recipe]:
         """
@@ -165,18 +209,15 @@ class RecipeLLMAdapter:
                 system_prompt = self._build_system_prompt()
                 user_prompt = self._build_user_prompt(payload)
 
-                # 2. Claude API 호출
+                # 2. Claude Code CLI 호출
                 logger.info(f"LLM 레시피 생성 시도 {attempt + 1}/{max_retries}")
-                response = self.client.messages.create(
+                content = _call_claude_cli(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
                     model=self.model,
-                    max_tokens=self.max_tokens,
-                    temperature=self.temperature,
-                    system=system_prompt,
-                    messages=[{"role": "user", "content": user_prompt}],
                 )
 
                 # 3. 응답 파싱
-                content = response.content[0].text
                 logger.debug(f"LLM 응답: {content[:200]}...")
                 recipes_data = parse_llm_response(content)
 
@@ -344,13 +385,7 @@ class QuickRecipeLLMAdapter:
     """번개 모드: Haiku 사용, 간소화된 프롬프트, 빠른 응답"""
 
     def __init__(self):
-        if not settings.anthropic_api_key:
-            raise ValueError("ANTHROPIC_API_KEY가 설정되지 않았습니다")
-
-        self.client = Anthropic(api_key=settings.anthropic_api_key)
-        self.model = settings.haiku_model
-        self.temperature = 0.5
-        self.max_tokens = 1500
+        self.model = "haiku"
 
     def generate_recipes(self, payload: RecommendationCreate, max_retries: int = 1) -> list[Recipe]:
         """빠른 레시피 생성 (Haiku, 재시도 1회)"""
@@ -360,15 +395,11 @@ class QuickRecipeLLMAdapter:
                 user_prompt = self._build_user_prompt(payload)
 
                 logger.info(f"[번개] LLM 레시피 생성 시도 {attempt + 1}/{max_retries} (model={self.model})")
-                response = self.client.messages.create(
+                content = _call_claude_cli(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
                     model=self.model,
-                    max_tokens=self.max_tokens,
-                    temperature=self.temperature,
-                    system=system_prompt,
-                    messages=[{"role": "user", "content": user_prompt}],
                 )
-
-                content = response.content[0].text
                 recipes_data = parse_llm_response(content)
 
                 recipes = []
@@ -443,13 +474,7 @@ class DetailedRecipeLLMAdapter:
     """정밀 모드: Sonnet 사용, 영양정보/대체재료/보관팁 포함"""
 
     def __init__(self):
-        if not settings.anthropic_api_key:
-            raise ValueError("ANTHROPIC_API_KEY가 설정되지 않았습니다")
-
-        self.client = Anthropic(api_key=settings.anthropic_api_key)
-        self.model = settings.llm_model
-        self.temperature = 0.7
-        self.max_tokens = 6000
+        self.model = "sonnet"
 
     def generate_recipes(self, payload: RecommendationCreate, max_retries: int = 2) -> list[Recipe]:
         """정밀 레시피 생성 (영양정보, 대체재료, 보관팁 포함)"""
@@ -459,15 +484,11 @@ class DetailedRecipeLLMAdapter:
                 user_prompt = self._build_user_prompt(payload)
 
                 logger.info(f"[정밀] LLM 레시피 생성 시도 {attempt + 1}/{max_retries} (model={self.model})")
-                response = self.client.messages.create(
+                content = _call_claude_cli(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
                     model=self.model,
-                    max_tokens=self.max_tokens,
-                    temperature=self.temperature,
-                    system=system_prompt,
-                    messages=[{"role": "user", "content": user_prompt}],
                 )
-
-                content = response.content[0].text
                 recipes_data = parse_llm_response(content)
 
                 recipes = []

@@ -14,11 +14,11 @@ import logging
 import math
 
 import httpx
-from anthropic import Anthropic
 
 from app.core.config import settings
 from app.data.allergen_derivatives import expand_exclusions
 from app.models.recommendation import Recipe, RecommendationCreate
+from app.services.llm_adapter import _call_claude_cli
 from app.services.youtube_client import (
     RECIPE_KEYWORDS,
     VideoInfo,
@@ -32,11 +32,7 @@ class YouTubeRecipeAdapter:
     """YouTube 검색 + Haiku 구조화로 레시피 생성"""
 
     def __init__(self):
-        if not settings.anthropic_api_key:
-            raise ValueError("ANTHROPIC_API_KEY가 설정되지 않았습니다 (Haiku 호출용)")
-
         self.yt_client = YouTubeAPIClient()
-        self.haiku_client = Anthropic(api_key=settings.anthropic_api_key)
 
     async def generate_recipes(self, payload: RecommendationCreate) -> list[Recipe]:
         """
@@ -202,16 +198,12 @@ class YouTubeRecipeAdapter:
 
 JSON 배열만 출력하세요."""
 
-        logger.info("Haiku로 레시피 구조화 시작")
-        response = self.haiku_client.messages.create(
-            model=settings.haiku_model,
-            max_tokens=settings.haiku_max_tokens,
-            temperature=settings.haiku_temperature,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
+        logger.info("Haiku로 레시피 구조화 시작 (Claude Code CLI)")
+        content = _call_claude_cli(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            model="haiku",
         )
-
-        content = response.content[0].text
         logger.debug(f"Haiku 응답: {content[:200]}...")
 
         # JSON 파싱
