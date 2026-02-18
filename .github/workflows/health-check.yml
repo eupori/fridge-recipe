@@ -1,0 +1,96 @@
+name: Health Check
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  health-check:
+    name: Service Health Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 20
+
+      - name: Backend health check
+        id: backend
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" --max-time 10 https://recipe-api.eupori.dev/health || echo "000")
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          if [ "$STATUS" != "200" ]; then
+            echo "Backend health check failed: HTTP $STATUS"
+            exit 1
+          fi
+          echo "Backend OK"
+
+      - name: Frontend health check
+        id: frontend
+        if: always()
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" --max-time 10 https://eupori.dev || echo "000")
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          if [ "$STATUS" != "200" ]; then
+            echo "Frontend health check failed: HTTP $STATUS"
+            exit 1
+          fi
+          echo "Frontend OK"
+
+      - name: 배포 누락 감지
+        id: deploy-drift
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # back/** 변경이 포함된 최신 커밋 SHA
+          LATEST_BACK_COMMIT=$(git log -1 --format="%H" -- back/)
+          echo "Latest back/ commit: $LATEST_BACK_COMMIT"
+
+          # 최근 성공한 Deploy Backend 워크플로우의 커밋 SHA
+          DEPLOY_SHA=$(gh run list \
+            --workflow=deploy-backend.yml \
+            --status=success \
+            --limit=1 \
+            --json headSha \
+            --jq '.[0].headSha // empty' 2>/dev/null || true)
+          echo "Latest successful deploy SHA: ${DEPLOY_SHA:-none}"
+
+          if [ -z "$DEPLOY_SHA" ]; then
+            echo "No successful backend deploy found — skipping drift check"
+            exit 0
+          fi
+
+          if [ "$LATEST_BACK_COMMIT" = "$DEPLOY_SHA" ]; then
+            echo "No drift detected"
+          elif git merge-base --is-ancestor "$DEPLOY_SHA" "$LATEST_BACK_COMMIT" 2>/dev/null; then
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+            echo "⚠️ Deploy drift detected: back/ changed in $LATEST_BACK_COMMIT but last deploy was $DEPLOY_SHA"
+            exit 1
+          else
+            echo "No drift detected (deploy is ahead or unrelated)"
+          fi
+
+      - name: Slack 알림
+        if: failure()
+        run: |
+          MESSAGES=""
+
+          if [ "${{ steps.backend.outcome }}" = "failure" ]; then
+            MESSAGES="${MESSAGES}• Backend DOWN (HTTP ${{ steps.backend.outputs.status }})\n"
+          fi
+
+          if [ "${{ steps.frontend.outcome }}" = "failure" ]; then
+            MESSAGES="${MESSAGES}• Frontend DOWN (HTTP ${{ steps.frontend.outputs.status }})\n"
+          fi
+
+          if [ "${{ steps.deploy-drift.outcome }}" = "failure" ]; then
+            MESSAGES="${MESSAGES}• 배포 누락 감지: back/ 변경 후 배포되지 않음\n"
+          fi
+
+          curl -s -X POST "$SLACK_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\":\"🚨 *헬스체크 실패*\n${MESSAGES}• 실행: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

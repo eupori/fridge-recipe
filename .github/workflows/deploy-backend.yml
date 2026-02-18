@@ -73,3 +73,12 @@ jobs:
           done
           echo "External health check failed after 3 attempts"
           exit 1
+
+      - name: Slack 알림 (배포 실패)
+        if: failure()
+        run: |
+          curl -s -X POST "$SLACK_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\":\"🚨 *Backend 배포 실패*\n• repo: \`${{ github.repository }}\`\n• branch: \`${{ github.ref_name }}\`\n• commit: \`${{ github.sha }}\`\n• 실행: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
