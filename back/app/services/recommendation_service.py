@@ -437,10 +437,15 @@ async def create_recommendation(
     db.commit()
 
     # 8. 캐시에 저장 (다음 동일 요청 시 LLM/이미지 비용 절약)
-    try:
-        save_cache(cache_key, response, db)
-    except Exception as e:
-        logger.warning(f"캐시 저장 실패 (무시): {e}")
+    # 품질 검증 실패(제목 재료 누락 등) 시 캐시 스킵 → 다음 요청에서 재생성
+    skip_cache = getattr(response, "_skip_cache", False)
+    if skip_cache:
+        logger.info("품질 검증 미달로 캐시 저장 스킵 (다음 요청 시 재생성)")
+    else:
+        try:
+            save_cache(cache_key, response, db)
+        except Exception as e:
+            logger.warning(f"캐시 저장 실패 (무시): {e}")
 
     # 9. 비용 추정 로깅
     llm_costs = {"anthropic": 0.035, "youtube": 0.010, "mock": 0.0}
