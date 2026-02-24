@@ -15,7 +15,8 @@ from app.models.recommendation import (
 from app.models.search_history import SearchHistoryCreate
 from app.models.user import User
 from app.services.auth_service import get_current_user_optional
-from app.services.ingredient_validator import validate_ingredients
+from app.services.ingredient_checker import check_ingredients_with_llm
+from app.services.ingredient_validator import sanitize_ingredients, validate_ingredients
 from app.services.job_manager import create_job, get_job, update_job
 from app.services.recommendation_service import (
     build_cache_key,
@@ -93,6 +94,9 @@ async def post_recommendations(
     - 각 레시피는 보유 재료와 구매 필요 재료로 분리됨
     - 통합된 장보기 리스트 (중복 제거됨)
     """
+    # 재료 정제 (프롬프트 인젝션 방지)
+    payload.ingredients = sanitize_ingredients(payload.ingredients)
+
     # 재료 검증 (비식품/위험 재료 차단)
     blocked = validate_ingredients(payload.ingredients)
     if blocked:
@@ -100,6 +104,18 @@ async def post_recommendations(
         raise HTTPException(
             status_code=400,
             detail=f"식품이 아닌 재료가 포함되어 있습니다: {blocked_str}. 먹을 수 있는 재료만 입력해주세요.",
+        )
+
+    if not payload.ingredients:
+        raise HTTPException(status_code=400, detail="유효한 재료를 입력해주세요.")
+
+    # LLM 기반 식재료 검증 (Haiku)
+    non_food = await check_ingredients_with_llm(payload.ingredients)
+    if non_food:
+        non_food_str = ", ".join(non_food)
+        raise HTTPException(
+            status_code=400,
+            detail=f"식재료가 아닌 항목이 포함되어 있습니다: {non_food_str}. 먹을 수 있는 재료만 입력해주세요.",
         )
 
     # 사용량 체크
@@ -277,6 +293,9 @@ async def post_recommendations_async(
     current_user: User | None = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
 ):
+    # 재료 정제 (프롬프트 인젝션 방지)
+    payload.ingredients = sanitize_ingredients(payload.ingredients)
+
     # 재료 검증
     blocked = validate_ingredients(payload.ingredients)
     if blocked:
@@ -284,6 +303,18 @@ async def post_recommendations_async(
         raise HTTPException(
             status_code=400,
             detail=f"식품이 아닌 재료가 포함되어 있습니다: {blocked_str}. 먹을 수 있는 재료만 입력해주세요.",
+        )
+
+    if not payload.ingredients:
+        raise HTTPException(status_code=400, detail="유효한 재료를 입력해주세요.")
+
+    # LLM 기반 식재료 검증 (Haiku)
+    non_food = await check_ingredients_with_llm(payload.ingredients)
+    if non_food:
+        non_food_str = ", ".join(non_food)
+        raise HTTPException(
+            status_code=400,
+            detail=f"식재료가 아닌 항목이 포함되어 있습니다: {non_food_str}. 먹을 수 있는 재료만 입력해주세요.",
         )
 
     # 사용량 체크

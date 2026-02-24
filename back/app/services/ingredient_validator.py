@@ -37,6 +37,28 @@ NON_FOOD_PATTERNS: list[re.Pattern[str]] = [
 ]
 
 
+MAX_INGREDIENT_LENGTH = 30
+# 허용 문자: 한글, 영문, 숫자, 공백, 하이픈, 괄호
+_ALLOWED_CHARS = re.compile(r"[^가-힣a-zA-Z0-9\s\-()]")
+
+
+def sanitize_ingredient(name: str) -> str:
+    """재료명 정제 (프롬프트 인젝션 방지)"""
+    name = name.strip()
+    # 허용되지 않는 문자 제거
+    name = _ALLOWED_CHARS.sub("", name)
+    # 길이 제한
+    name = name[:MAX_INGREDIENT_LENGTH]
+    # 공백 정리
+    name = " ".join(name.split())
+    return name
+
+
+def sanitize_ingredients(ingredients: list[str]) -> list[str]:
+    """재료 목록 정제"""
+    return [s for s in (sanitize_ingredient(i) for i in ingredients) if s]
+
+
 def validate_ingredients(ingredients: list[str]) -> list[str]:
     """
     비식품 재료를 감지하여 목록으로 반환합니다.

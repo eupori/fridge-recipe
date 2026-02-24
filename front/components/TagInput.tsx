@@ -51,6 +51,8 @@ export function TagInput({ value, onChange, placeholder, disabled, id }: TagInpu
   );
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    // 한글 IME 조합 중에는 키 이벤트 무시 (조합 완료 전 addTag 방지)
+    if (e.nativeEvent.isComposing) return;
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
       addTag(inputValue);
