@@ -48,13 +48,21 @@ def _call_claude_cli(system_prompt: str, user_prompt: str, model: str, timeout: 
         "--no-session-persistence",
     ]
 
+    import os
+    env = os.environ.copy()
+    env.setdefault("HOME", "/home/appuser")
+
     logger.info(f"Claude CLI 호출: model={model}, timeout={timeout}s")
     result = subprocess.run(
         cmd,
         capture_output=True,
         text=True,
         timeout=timeout,
+        env=env,
     )
+
+    if result.stderr:
+        logger.warning(f"Claude CLI stderr: {result.stderr.strip()[:500]}")
 
     if result.returncode != 0:
         stderr = result.stderr.strip()[:500] if result.stderr else "(no stderr)"
