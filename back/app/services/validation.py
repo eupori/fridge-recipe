@@ -37,6 +37,32 @@ def _check_ingredient_step_consistency(
     return missing
 
 
+def _auto_fix_missing_ingredients(recipe, missing_ingredients: list[str]) -> None:
+    """
+    조리 단계에서 빠진 핵심 재료를 자동으로 삽입
+
+    전략: "재료" 라는 단어가 있는 단계에 구체적 재료명을 삽입하거나,
+    적절한 위치에 새 단계를 추가
+    """
+    steps = recipe.steps
+    if not steps or not missing_ingredients:
+        return
+
+    for ing in missing_ingredients:
+        # 1차: "재료를 넣" 같은 제네릭 표현이 있는 단계에 구체적 재료명 삽입
+        fixed = False
+        for i, step in enumerate(steps):
+            if "재료를" in step or "재료" in step:
+                steps[i] = step.replace("재료를", f"{ing}을(를)", 1)
+                fixed = True
+                break
+
+        if not fixed:
+            # 2차: 마지막에서 하나 전에 "{재료}을(를) 넣고 섞는다" 단계 추가
+            insert_idx = max(1, len(steps) - 1)
+            steps.insert(insert_idx, f"{ing}을(를) 넣고 잘 섞는다")
+
+
 def validate_response(resp: RecommendationResponse, req: RecommendationCreate) -> None:
     # hard rules
     if len(resp.recipes) != 3:
@@ -75,12 +101,13 @@ def validate_response(resp: RecommendationResponse, req: RecommendationCreate) -
         if not valid_steps:
             raise ValueError("steps_length_invalid")
 
-        # 제목 재료가 조리 단계에서 사용되는지 검증 (경고, 캐시 방지용)
+        # 제목 재료가 조리 단계에서 사용되는지 검증 + 자동 보정
         missing = _check_ingredient_step_consistency(
             r.title, r.ingredients_total, r.steps
         )
         if missing:
             logger.warning(
-                f"[품질] '{r.title}' 제목 재료 {missing}가 조리 단계에 없음"
+                f"[품질] '{r.title}' 제목 재료 {missing}가 조리 단계에 없음 → 자동 보정"
             )
+            _auto_fix_missing_ingredients(r, missing)
             resp._skip_cache = True  # type: ignore[attr-defined]

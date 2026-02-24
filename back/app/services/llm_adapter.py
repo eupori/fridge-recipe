@@ -125,15 +125,16 @@ def fallback_dummy_recipes(payload: RecommendationCreate) -> list[Recipe]:
         groups = [["계란"], ["김치"], ["양파"]]
 
     # 레시피 템플릿 (사용자 재료로 채움)
+    # steps_fmt: {0}=메인 재료, {rest}=나머지 재료 나열
     templates = [
         {
             "title_fmt": "{} 볶음밥",
             "summary": "냉장고 재료로 빠르게 만드는 볶음밥",
             "base_ings": ["밥", "간장", "참기름"],
-            "steps": [
-                "재료를 먹기 좋은 크기로 썬다",
-                "팬에 기름을 두르고 재료를 볶는다",
-                "밥을 넣고 함께 볶는다",
+            "steps_fn": lambda main, rest: [
+                f"{', '.join([main] + rest)}을(를) 먹기 좋은 크기로 썬다" if rest else f"{main}을(를) 먹기 좋은 크기로 썬다",
+                f"팬에 기름을 두르고 {main}을(를) 먼저 볶는다",
+                f"{''.join(f'{r}, ' for r in rest)}밥을 넣고 함께 볶는다" if rest else "밥을 넣고 함께 볶는다",
                 "간장으로 간을 맞추고 참기름을 둘러 완성",
             ],
             "tips": ["밥은 찬밥을 쓰면 더 잘 볶아져요"],
@@ -142,10 +143,10 @@ def fallback_dummy_recipes(payload: RecommendationCreate) -> list[Recipe]:
             "title_fmt": "{} 덮밥",
             "summary": "재료를 볶아 밥 위에 올린 간단 덮밥",
             "base_ings": ["밥", "간장", "설탕"],
-            "steps": [
-                "재료를 적당한 크기로 자른다",
-                "팬에 기름을 두르고 재료를 볶는다",
-                "간장, 설탕으로 양념한다",
+            "steps_fn": lambda main, rest: [
+                f"{main}을(를) 적당한 크기로 자른다",
+                f"팬에 기름을 두르고 {main}을(를) 볶는다",
+                f"{''.join(f'{r}도 넣고 ' for r in rest)}간장, 설탕으로 양념한다" if rest else "간장, 설탕으로 양념한다",
                 "밥 위에 올려 완성",
             ],
             "tips": ["계란 프라이를 올리면 더 든든해요"],
@@ -154,11 +155,11 @@ def fallback_dummy_recipes(payload: RecommendationCreate) -> list[Recipe]:
             "title_fmt": "{} 찌개",
             "summary": "재료를 넣고 끓인 따끈한 찌개",
             "base_ings": ["된장", "고추장", "물"],
-            "steps": [
-                "재료를 먹기 좋게 썬다",
+            "steps_fn": lambda main, rest: [
+                f"{', '.join([main] + rest)}을(를) 먹기 좋게 썬다" if rest else f"{main}을(를) 먹기 좋게 썬다",
                 "냄비에 물을 넣고 끓인다",
-                "된장을 풀고 재료를 넣는다",
-                "5분간 끓여 완성",
+                f"된장을 풀고 {main}을(를) 넣는다",
+                f"{''.join(f'{r}, ' for r in rest)}고추장을 넣고 5분간 끓여 완성" if rest else "고추장을 넣고 5분간 끓여 완성",
             ],
             "tips": ["두부를 넣으면 더 맛있어요"],
         },
@@ -167,6 +168,7 @@ def fallback_dummy_recipes(payload: RecommendationCreate) -> list[Recipe]:
     recipes = []
     for group, tmpl in zip(groups, templates):
         main_ing = group[0] if group else "재료"
+        rest_ings = [g for g in group[1:] if g != main_ing]
         all_ings = list(dict.fromkeys(group + tmpl["base_ings"]))
         recipes.append(
             Recipe(
@@ -178,7 +180,7 @@ def fallback_dummy_recipes(payload: RecommendationCreate) -> list[Recipe]:
                 ingredients_total=all_ings,
                 ingredients_have=[],
                 ingredients_need=[],
-                steps=tmpl["steps"],
+                steps=tmpl["steps_fn"](main_ing, rest_ings),
                 tips=tmpl["tips"],
                 warnings=["LLM 연결 실패로 자동 생성된 간이 레시피입니다"],
             )
