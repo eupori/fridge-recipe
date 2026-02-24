@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     claude_binary: str = "claude"
     claude_subprocess_timeout: int = 120
 
+    # Concurrency & Cache
+    max_concurrent_llm: int = 2  # 동시 LLM subprocess 최대 수
+    cache_expiry_days: int = 14  # 캐시 만료일
+
     # Gemini (이미지 생성용) - 유료 계정 필요
     gemini_api_key: str | None = None
     # 옵션: gemini-2.0-flash-exp-image-generation (기본), imagen-4.0-generate-001 (유료 전용)

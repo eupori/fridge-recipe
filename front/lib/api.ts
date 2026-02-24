@@ -146,6 +146,55 @@ export async function createRecommendation(payload: RecommendationCreate) {
   return result;
 }
 
+// Async recommendation API
+export type JobStatusResponse = {
+  job_id: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  progress: number;
+  recommendation_id: string | null;
+  error: string | null;
+};
+
+export async function createRecommendationAsync(
+  payload: RecommendationCreate
+): Promise<{ job_id: string | null; recommendation_id: string | null; _dailyRemaining?: number }> {
+  const res = await fetch(`${API_BASE}/recommendations/async`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify(payload),
+  });
+
+  if (res.status === 429) {
+    const data = await res.json().catch(() => ({}));
+    throw new RateLimitError(
+      data.detail || "일일 무료 이용 횟수를 초과했습니다.",
+      data.remaining ?? 0,
+    );
+  }
+
+  const remaining = res.headers.get("X-Daily-Remaining");
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    const msg = data?.detail || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+
+  const result = await res.json();
+  if (remaining !== null) {
+    result._dailyRemaining = parseInt(remaining, 10);
+  }
+  return result;
+}
+
+export async function getJobStatus(jobId: string): Promise<JobStatusResponse> {
+  const res = await fetch(`${API_BASE}/recommendations/jobs/${jobId}`);
+  if (!res.ok) {
+    throw new Error(`Job 조회 실패: HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function getRecommendation(id: string) {
   const res = await fetch(`${API_BASE}/recommendations/${id}`, {
     cache: "no-store",

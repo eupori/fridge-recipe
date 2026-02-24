@@ -3,7 +3,7 @@
 import { Suspense, useMemo, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { createRecommendation, getSearchHistories, getStats, SearchHistoryResponse, StatsResponse, RateLimitError } from "../lib/api";
+import { createRecommendationAsync, getJobStatus, getSearchHistories, getStats, SearchHistoryResponse, StatsResponse, RateLimitError } from "../lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { Button } from "@/components/ui/button";
@@ -70,6 +70,7 @@ function HomePageContent() {
   const [qualityLevel, setQualityLevel] = usePersistedState("recipe-quality", "standard");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
   const [pantryItems, setPantryItems] = useState<string[]>([]);
   const [recentHistories, setRecentHistories] = useState<SearchHistoryResponse[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -143,8 +144,9 @@ function HomePageContent() {
     setError(null);
     setRateLimited(false);
     setLoading(true);
+    setProgress(0);
     try {
-      const rec = await createRecommendation({
+      const result = await createRecommendationAsync({
         ingredients: history.ingredients,
         constraints: {
           time_limit_min: history.time_limit_min,
@@ -154,10 +156,18 @@ function HomePageContent() {
           quality_level: qualityLevel,
         },
       });
-      if (rec._dailyRemaining !== undefined) {
-        setDailyRemaining(rec._dailyRemaining);
+      if (result._dailyRemaining !== undefined) {
+        setDailyRemaining(result._dailyRemaining);
       }
-      router.push(`/r/${rec.id}`);
+
+      if (result.recommendation_id) {
+        router.push(`/r/${result.recommendation_id}`);
+        return;
+      }
+
+      if (result.job_id) {
+        pollJob(result.job_id);
+      }
     } catch (e: any) {
       if (e instanceof RateLimitError) {
         setRateLimited(true);
@@ -167,6 +177,7 @@ function HomePageContent() {
         setError(e?.message ?? "요청에 실패했습니다");
       }
       setLoading(false);
+      setProgress(0);
     }
   };
 
@@ -177,18 +188,44 @@ function HomePageContent() {
       .filter(Boolean);
   }, [ingredientsText]);
 
+  // 폴링 공통 로직
+  const pollJob = useCallback(async (jobId: string) => {
+    const poll = setInterval(async () => {
+      try {
+        const status = await getJobStatus(jobId);
+        setProgress(status.progress);
+
+        if (status.status === "completed" && status.recommendation_id) {
+          clearInterval(poll);
+          router.push(`/r/${status.recommendation_id}`);
+        } else if (status.status === "failed") {
+          clearInterval(poll);
+          setError(status.error || "레시피 생성에 실패했습니다.");
+          setLoading(false);
+          setProgress(0);
+        }
+      } catch {
+        clearInterval(poll);
+        setError("작업 상태를 확인할 수 없습니다.");
+        setLoading(false);
+        setProgress(0);
+      }
+    }, 2000);
+  }, [router]);
+
   // onSubmit을 useCallback으로 정의하여 autoSearch useEffect에서 사용
   const onSubmit = useCallback(async () => {
     setError(null);
     setRateLimited(false);
     setLoading(true);
+    setProgress(0);
     try {
       const exclude = excludeText
         .split(/,|\n/)
         .map((s) => s.trim())
         .filter(Boolean);
 
-      const rec = await createRecommendation({
+      const result = await createRecommendationAsync({
         ingredients,
         constraints: {
           time_limit_min: timeLimit,
@@ -200,11 +237,20 @@ function HomePageContent() {
       });
 
       // 남은 횟수 업데이트
-      if (rec._dailyRemaining !== undefined) {
-        setDailyRemaining(rec._dailyRemaining);
+      if (result._dailyRemaining !== undefined) {
+        setDailyRemaining(result._dailyRemaining);
       }
 
-      router.push(`/r/${rec.id}`);
+      if (result.recommendation_id) {
+        // 캐시 히트 → 즉시 이동
+        router.push(`/r/${result.recommendation_id}`);
+        return;
+      }
+
+      // 캐시 미스 → 폴링
+      if (result.job_id) {
+        pollJob(result.job_id);
+      }
     } catch (e: any) {
       if (e instanceof RateLimitError) {
         setRateLimited(true);
@@ -214,8 +260,9 @@ function HomePageContent() {
         setError(e?.message ?? "요청에 실패했습니다");
       }
       setLoading(false);
+      setProgress(0);
     }
-  }, [excludeText, ingredients, timeLimit, servings, tools, qualityLevel]);
+  }, [excludeText, ingredients, timeLimit, servings, tools, qualityLevel, pollJob]);
 
   // autoSearch 파라미터가 있으면 자동으로 검색 실행
   useEffect(() => {

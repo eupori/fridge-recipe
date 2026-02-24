@@ -1,9 +1,13 @@
+import asyncio
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import SessionLocal, get_db
+from app.models.job import JobStatus
 from app.models.recommendation import (
     RecommendationCreate,
     RecommendationResponse,
@@ -12,9 +16,17 @@ from app.models.search_history import SearchHistoryCreate
 from app.models.user import User
 from app.services.auth_service import get_current_user_optional
 from app.services.ingredient_validator import validate_ingredients
-from app.services.recommendation_service import create_recommendation, get_recommendation
+from app.services.job_manager import create_job, get_job, update_job
+from app.services.recommendation_service import (
+    build_cache_key,
+    create_recommendation,
+    get_recommendation,
+    lookup_cache,
+)
 from app.services.search_history_service import SearchHistoryService
 from app.services.usage_service import UsageService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -201,3 +213,177 @@ def get_recommendations(
     if rec is None:
         raise HTTPException(status_code=404, detail="not_found")
     return rec
+
+
+# --- 비동기 큐 엔드포인트 ---
+
+
+async def _background_generate(
+    job_id: str,
+    payload: RecommendationCreate,
+    user_id: str | None,
+    client_ip: str,
+) -> None:
+    """백그라운드에서 레시피 생성 (Job 상태 업데이트)"""
+    update_job(job_id, status="processing", progress=10)
+    db = SessionLocal()
+    try:
+        response = await create_recommendation(payload, db)
+        update_job(job_id, progress=80)
+
+        # 사용량 증가
+        usage_service = UsageService(db)
+        if user_id:
+            usage_service.increment(f"user:{user_id}", limit=settings.user_daily_limit)
+        else:
+            usage_service.increment(client_ip)
+
+        # 검색 기록 저장
+        if user_id:
+            search_history_service = SearchHistoryService(db)
+            search_history_service.create(
+                user_id=user_id,
+                data=SearchHistoryCreate(
+                    recommendation_id=response.id,
+                    ingredients=payload.ingredients,
+                    time_limit_min=payload.constraints.time_limit_min,
+                    servings=payload.constraints.servings,
+                    recipe_titles=[r.title for r in response.recipes],
+                    recipe_images=[r.image_url for r in response.recipes],
+                ),
+            )
+
+        update_job(
+            job_id,
+            status="completed",
+            progress=100,
+            recommendation_id=response.id,
+        )
+    except Exception as e:
+        logger.error(f"백그라운드 레시피 생성 실패 (job={job_id}): {e}")
+        update_job(job_id, status="failed", error=str(e))
+    finally:
+        db.close()
+
+
+@router.post(
+    "/async",
+    summary="비동기 레시피 추천 생성",
+    description="레시피 추천을 비동기로 생성하고 Job ID를 반환합니다. 캐시 히트 시 즉시 recommendation_id를 반환합니다.",
+)
+async def post_recommendations_async(
+    payload: RecommendationCreate,
+    request: Request,
+    current_user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    # 재료 검증
+    blocked = validate_ingredients(payload.ingredients)
+    if blocked:
+        blocked_str = ", ".join(blocked)
+        raise HTTPException(
+            status_code=400,
+            detail=f"식품이 아닌 재료가 포함되어 있습니다: {blocked_str}. 먹을 수 있는 재료만 입력해주세요.",
+        )
+
+    # 사용량 체크
+    usage_service = UsageService(db)
+    client_ip = request.headers.get(
+        "x-real-ip", request.client.host if request.client else "unknown"
+    ).strip()
+
+    if current_user:
+        user_key = f"user:{current_user.id}"
+        remaining = usage_service.get_remaining(user_key, limit=settings.user_daily_limit)
+        if remaining <= 0:
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "detail": f"일일 이용 횟수({settings.user_daily_limit}회)를 초과했습니다. 내일 다시 이용해주세요!",
+                    "remaining": 0,
+                },
+                headers={"X-Daily-Remaining": "0"},
+            )
+    else:
+        remaining = usage_service.get_remaining(client_ip)
+        if remaining <= 0:
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "detail": "일일 무료 이용 횟수를 초과했습니다. 로그인하면 더 많이 이용할 수 있어요!",
+                    "remaining": 0,
+                },
+                headers={"X-Daily-Remaining": "0"},
+            )
+
+    # 캐시 히트 시 즉시 반환
+    cache_key = build_cache_key(payload)
+    cached = lookup_cache(cache_key, db)
+    if cached is not None:
+        from datetime import UTC, datetime
+        from uuid import uuid4
+
+        from app.models.recommendation import RecommendationRecord
+
+        new_id = f"rec_{uuid4().hex[:10]}"
+        cloned = cached.model_copy(update={"id": new_id, "created_at": datetime.now(UTC)})
+        record = RecommendationRecord(
+            id=new_id, created_at=cloned.created_at, data=cloned.model_dump(mode="json")
+        )
+        db.add(record)
+        db.commit()
+
+        # 사용량 증가
+        if current_user:
+            remaining = usage_service.increment(
+                f"user:{current_user.id}", limit=settings.user_daily_limit
+            )
+        else:
+            remaining = usage_service.increment(client_ip)
+
+        # 검색 기록 저장
+        if current_user:
+            SearchHistoryService(db).create(
+                user_id=current_user.id,
+                data=SearchHistoryCreate(
+                    recommendation_id=new_id,
+                    ingredients=payload.ingredients,
+                    time_limit_min=payload.constraints.time_limit_min,
+                    servings=payload.constraints.servings,
+                    recipe_titles=[r.title for r in cloned.recipes],
+                    recipe_images=[r.image_url for r in cloned.recipes],
+                ),
+            )
+
+        headers = {}
+        if remaining is not None:
+            headers["X-Daily-Remaining"] = str(remaining)
+        return JSONResponse(
+            content={"job_id": None, "recommendation_id": new_id},
+            headers=headers,
+        )
+
+    # 캐시 미스 → Job 생성 + 백그라운드 처리
+    job_id = create_job()
+    asyncio.create_task(
+        _background_generate(
+            job_id,
+            payload,
+            user_id=current_user.id if current_user else None,
+            client_ip=client_ip,
+        )
+    )
+    return {"job_id": job_id, "recommendation_id": None}
+
+
+@router.get(
+    "/jobs/{job_id}",
+    response_model=JobStatus,
+    summary="작업 상태 조회",
+    description="비동기 레시피 생성 작업의 상태를 조회합니다.",
+)
+async def get_job_status(job_id: str):
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
+    return job
