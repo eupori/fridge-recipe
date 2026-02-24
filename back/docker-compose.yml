@@ -8,6 +8,8 @@ services:
     volumes:
       - ./data:/app/data
     restart: always
+    mem_limit: 512m
+    memswap_limit: 768m
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
