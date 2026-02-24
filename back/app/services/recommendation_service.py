@@ -221,7 +221,7 @@ def split_have_need(
 
 
 async def create_recommendation(
-    payload: RecommendationCreate, db: Session
+    payload: RecommendationCreate, db: Session, skip_images: bool = False
 ) -> RecommendationResponse:
     """
     사용자 재료로 레시피 추천 생성 (LLM 통합 + 이미지 검색)
@@ -258,7 +258,7 @@ async def create_recommendation(
         logger.info(f"캐시에서 레시피 반환: ID={new_id} (캐시키={cache_key[:12]}...)")
         return cloned
 
-    # 캐시 미스 → Semaphore 내에서 LLM + 이미지 처리
+    # 캐시 미스 → Semaphore 내에서 LLM 호출만 (이미지는 밖에서)
     async with get_llm_semaphore():
         # 1. 레시피 생성 어댑터 선택 (quality_level별 분기)
         provider = settings.recipe_provider
@@ -308,54 +308,54 @@ async def create_recommendation(
         llm_elapsed = time.monotonic() - start_time
         logger.info(f"레시피 생성 완료: {llm_elapsed:.1f}초 (provider={provider})")
 
-        # 3. 이미지 처리 (번개 모드는 완전 스킵) + YouTube 참고 영상 (정밀 모드)
-        video_results: list[ReferenceVideo | None] = [None] * len(recipes_raw)
+    # 3. 이미지 처리 (세마포어 밖, 번개/skip_images 모드는 스킵) + YouTube 참고 영상 (정밀 모드)
+    video_results: list[ReferenceVideo | None] = [None] * len(recipes_raw)
 
-        if quality == "fast":
-            logger.info("[번개] 이미지 스킵")
-            image_results = [None] * len(recipes_raw)
+    if quality == "fast" or skip_images:
+        logger.info("[이미지 스킵] fast 모드 또는 skip_images")
+        image_results = [None] * len(recipes_raw)
+    else:
+        image_service = ImageSearchService(quality_level=quality)
+        # 정밀 모드: 퀄리티 우선, 시간 제한 없이 완료까지 대기 (gunicorn 120s 내)
+        if quality == "detailed":
+            image_timeout = max(90 - llm_elapsed, 45)
         else:
-            image_service = ImageSearchService(quality_level=quality)
-            # 정밀 모드: 퀄리티 우선, 시간 제한 없이 완료까지 대기 (gunicorn 120s 내)
-            if quality == "detailed":
-                image_timeout = max(90 - llm_elapsed, 45)
-            else:
-                image_timeout = max(28 - llm_elapsed, 5)
-            logger.info(f"이미지 검색 시작: {len(recipes_raw)}개 레시피 (타임아웃: {image_timeout:.1f}초)")
-            image_tasks = [image_service.get_image(recipe.title) for recipe in recipes_raw]
+            image_timeout = max(28 - llm_elapsed, 5)
+        logger.info(f"이미지 검색 시작: {len(recipes_raw)}개 레시피 (타임아웃: {image_timeout:.1f}초)")
+        image_tasks = [image_service.get_image(recipe.title) for recipe in recipes_raw]
 
-            # 정밀 모드: YouTube 영상도 병렬 검색
-            if quality == "detailed" and settings.youtube_api_key:
-                try:
-                    from app.services.youtube_video_service import YouTubeVideoService
+        # 정밀 모드: YouTube 영상도 병렬 검색
+        if quality == "detailed" and settings.youtube_api_key:
+            try:
+                from app.services.youtube_video_service import YouTubeVideoService
 
-                    yt_service = YouTubeVideoService()
-                    yt_tasks = [yt_service.find_reference_video(r.title) for r in recipes_raw]
-                    logger.info(f"[정밀] YouTube 참고 영상 검색 시작: {len(recipes_raw)}개")
+                yt_service = YouTubeVideoService()
+                yt_tasks = [yt_service.find_reference_video(r.title) for r in recipes_raw]
+                logger.info(f"[정밀] YouTube 참고 영상 검색 시작: {len(recipes_raw)}개")
 
-                    # 각 태스크를 개별 타임아웃으로 래핑하여 부분 결과 보존
-                    wrapped_img = [
-                        asyncio.wait_for(t, timeout=image_timeout) for t in image_tasks
-                    ]
-                    wrapped_yt = [
-                        asyncio.wait_for(t, timeout=image_timeout) for t in yt_tasks
-                    ]
-                    all_tasks = wrapped_img + wrapped_yt
-                    all_results = await asyncio.gather(*all_tasks, return_exceptions=True)
+                # 각 태스크를 개별 타임아웃으로 래핑하여 부분 결과 보존
+                wrapped_img = [
+                    asyncio.wait_for(t, timeout=image_timeout) for t in image_tasks
+                ]
+                wrapped_yt = [
+                    asyncio.wait_for(t, timeout=image_timeout) for t in yt_tasks
+                ]
+                all_tasks = wrapped_img + wrapped_yt
+                all_results = await asyncio.gather(*all_tasks, return_exceptions=True)
 
-                    image_results = list(all_results[: len(recipes_raw)])
-                    video_results = list(all_results[len(recipes_raw) :])
-                except ImportError as e:
-                    logger.warning(f"[정밀] YouTube 모듈 임포트 실패, 영상 없이 진행: {e}")
-                    wrapped_img = [
-                        asyncio.wait_for(t, timeout=image_timeout) for t in image_tasks
-                    ]
-                    image_results = await asyncio.gather(*wrapped_img, return_exceptions=True)
-            else:
+                image_results = list(all_results[: len(recipes_raw)])
+                video_results = list(all_results[len(recipes_raw) :])
+            except ImportError as e:
+                logger.warning(f"[정밀] YouTube 모듈 임포트 실패, 영상 없이 진행: {e}")
                 wrapped_img = [
                     asyncio.wait_for(t, timeout=image_timeout) for t in image_tasks
                 ]
                 image_results = await asyncio.gather(*wrapped_img, return_exceptions=True)
+        else:
+            wrapped_img = [
+                asyncio.wait_for(t, timeout=image_timeout) for t in image_tasks
+            ]
+            image_results = await asyncio.gather(*wrapped_img, return_exceptions=True)
 
     # 5. ingredients_have, ingredients_need 분리 + 이미지 URL + 참고 영상 추가
     final_recipes = []

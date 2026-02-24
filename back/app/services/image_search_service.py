@@ -242,12 +242,70 @@ class GoogleImageSearchAdapter(ImageSearchAdapter):
             logger.error(f"Google 이미지 검색 실패: {e}")
             return None
 
+    async def _scrape_google_images(self, query: str) -> str | None:
+        """Google Images HTML 스크래핑으로 이미지 URL 검색 (API 키 불필요)"""
+        import re as _re
+
+        logger.info(f"[Google Scrape] 스크래핑 시작: '{query}'")
+        try:
+            english_name = self._get_english_translation(query)
+            search_query = quote(f"{query} {english_name} 음식 사진")
+            url = f"https://www.google.com/search?q={search_query}&tbm=isch&ijn=0"
+            headers = {
+                "User-Agent": (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                )
+            }
+
+            async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+                resp = await client.get(url, headers=headers)
+                resp.raise_for_status()
+
+            logger.info(f"[Google Scrape] 응답: status={resp.status_code}, length={len(resp.text)}")
+
+            # 두 가지 패턴으로 이미지 URL 추출
+            urls = _re.findall(
+                r'\["(https?://[^"]+\.(?:jpg|jpeg|png|webp)(?:\?[^"]*)?)"',
+                resp.text,
+            )
+            # 패턴 2: 다른 형태의 이미지 URL
+            if not urls:
+                urls = _re.findall(
+                    r'"(https?://[^"]+\.(?:jpg|jpeg|png|webp)(?:\?[^"]*)?)"',
+                    resp.text,
+                )
+                logger.info(f"[Google Scrape] 패턴2 매칭: {len(urls)}개 URL")
+
+            urls = [
+                u for u in urls
+                if "gstatic.com" not in u
+                and "google.com" not in u
+                and "googleapis.com" not in u
+                and "pstatic.net" not in u
+                and "daumcdn.net" not in u
+                and "tistorycdn.com" not in u
+            ]
+
+            if urls:
+                logger.info(f"[Google Scrape] 이미지 URL 발견: '{query}' → {urls[0][:80]}")
+                return urls[0]
+
+            logger.warning(f"[Google Scrape] 이미지 URL 찾지 못함: '{query}' (HTML 길이: {len(resp.text)})")
+            return None
+
+        except Exception as e:
+            logger.warning(f"[Google Scrape] 검색 실패: '{query}' - {type(e).__name__}: {e}")
+            return None
+
     async def search_image(self, query: str) -> str | None:
         """
         Google Custom Search API로 이미지 검색 (다단계 폴백)
 
-        1차: 한국어 + 영어 증강 쿼리
-        2차: 영어만 쿼리
+        1차: 한국어 + 영어 증강 쿼리 (API)
+        2차: 영어만 쿼리 (API)
+        3차: Google Images 스크래핑 (API 키 불필요)
 
         Args:
             query: 레시피 제목
@@ -268,6 +326,12 @@ class GoogleImageSearchAdapter(ImageSearchAdapter):
             result = await self._search_with_query(english_only)
             if result:
                 return result
+
+        # 3차 시도: Google Images 스크래핑 (API 실패 시 폴백)
+        logger.info(f"Google API 실패, 스크래핑 폴백 시도: '{query}'")
+        result = await self._scrape_google_images(query)
+        if result:
+            return result
 
         logger.warning(f"Google 이미지 검색 실패 (모든 시도): '{query}'")
         return None
@@ -739,9 +803,9 @@ class ImageSearchService:
     IMAGES_DIR = DATA_DIR / "images"
     MAX_CACHE_ENTRIES = 1000
 
-    def __init__(self, quality_level: str = "standard"):
+    def __init__(self, quality_level: str = "standard", provider_override: str | None = None):
         # Primary provider 선택
-        provider = settings.image_search_provider.lower()
+        provider = (provider_override or settings.image_search_provider).lower()
         self.quality_level = quality_level
 
         if provider == "google":

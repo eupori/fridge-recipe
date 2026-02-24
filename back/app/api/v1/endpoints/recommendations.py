@@ -244,7 +244,7 @@ async def _background_generate(
     update_job(job_id, status="processing", progress=10)
     db = SessionLocal()
     try:
-        response = await create_recommendation(payload, db)
+        response = await create_recommendation(payload, db, skip_images=True)
         update_job(job_id, progress=80)
 
         # 사용량 증가

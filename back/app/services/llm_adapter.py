@@ -104,64 +104,86 @@ def parse_llm_response(content: str) -> list[dict]:
 
 
 def fallback_dummy_recipes(payload: RecommendationCreate) -> list[Recipe]:
-    """API 실패 시 더미 레시피 반환 (공통 유틸)"""
-    logger.warning("폴백 더미 레시피 생성")
-    return [
-        Recipe(
-            title="간단 계란볶음밥",
-            time_min=10,
-            servings=payload.constraints.servings,
-            summary="냉장고 재료로 빠르게 만드는 볶음밥",
-            image_url=None,
-            ingredients_total=["밥", "계란", "간장", "참기름"],
-            ingredients_have=[],
-            ingredients_need=[],
-            steps=[
-                "팬에 기름을 두르고 계란을 볶는다",
-                "밥을 넣고 볶는다",
-                "간장과 참기름으로 간한다",
-                "그릇에 담아 완성",
+    """API 실패 시 사용자 재료 기반 폴백 레시피 반환 (공통 유틸)"""
+    user_ings = [i.strip() for i in payload.ingredients if i.strip()]
+    logger.warning(f"폴백 레시피 생성: 사용자 재료 {user_ings}")
+
+    # 사용자 재료를 3개 레시피에 분배
+    if len(user_ings) >= 3:
+        # 재료가 3개 이상이면 분배
+        third = max(1, len(user_ings) // 3)
+        groups = [
+            user_ings[:third],
+            user_ings[third : third * 2],
+            user_ings[third * 2 :],
+        ]
+    elif len(user_ings) == 2:
+        groups = [[user_ings[0]], [user_ings[1]], user_ings]
+    elif len(user_ings) == 1:
+        groups = [user_ings, user_ings, user_ings]
+    else:
+        groups = [["계란"], ["김치"], ["양파"]]
+
+    # 레시피 템플릿 (사용자 재료로 채움)
+    templates = [
+        {
+            "title_fmt": "{} 볶음밥",
+            "summary": "냉장고 재료로 빠르게 만드는 볶음밥",
+            "base_ings": ["밥", "간장", "참기름"],
+            "steps": [
+                "재료를 먹기 좋은 크기로 썬다",
+                "팬에 기름을 두르고 재료를 볶는다",
+                "밥을 넣고 함께 볶는다",
+                "간장으로 간을 맞추고 참기름을 둘러 완성",
             ],
-            tips=["계란은 스크램블 형태로 먼저 볶으면 좋아요"],
-            warnings=[],
-        ),
-        Recipe(
-            title="간단 달걀국",
-            time_min=8,
-            servings=payload.constraints.servings,
-            summary="속 편한 국물 한 그릇",
-            image_url=None,
-            ingredients_total=["계란", "소금", "물"],
-            ingredients_have=[],
-            ingredients_need=[],
-            steps=[
-                "물을 끓인다",
-                "소금으로 간한다",
-                "계란을 풀어 넣는다",
-                "30초 두었다가 가볍게 저어 완성",
+            "tips": ["밥은 찬밥을 쓰면 더 잘 볶아져요"],
+        },
+        {
+            "title_fmt": "{} 덮밥",
+            "summary": "재료를 볶아 밥 위에 올린 간단 덮밥",
+            "base_ings": ["밥", "간장", "설탕"],
+            "steps": [
+                "재료를 적당한 크기로 자른다",
+                "팬에 기름을 두르고 재료를 볶는다",
+                "간장, 설탕으로 양념한다",
+                "밥 위에 올려 완성",
             ],
-            tips=["다진마늘을 넣어도 좋아요"],
-            warnings=[],
-        ),
-        Recipe(
-            title="간단 김치볶음",
-            time_min=7,
-            servings=payload.constraints.servings,
-            summary="김치만 있으면 OK",
-            image_url=None,
-            ingredients_total=["김치", "참기름"],
-            ingredients_have=[],
-            ingredients_need=[],
-            steps=[
-                "김치를 먹기 좋게 자른다",
-                "팬에 참기름을 두른다",
-                "김치를 넣고 볶는다",
-                "간을 맞춰 완성",
+            "tips": ["계란 프라이를 올리면 더 든든해요"],
+        },
+        {
+            "title_fmt": "{} 찌개",
+            "summary": "재료를 넣고 끓인 따끈한 찌개",
+            "base_ings": ["된장", "고추장", "물"],
+            "steps": [
+                "재료를 먹기 좋게 썬다",
+                "냄비에 물을 넣고 끓인다",
+                "된장을 풀고 재료를 넣는다",
+                "5분간 끓여 완성",
             ],
-            tips=["돼지고기를 추가하면 더 맛있어요"],
-            warnings=[],
-        ),
+            "tips": ["두부를 넣으면 더 맛있어요"],
+        },
     ]
+
+    recipes = []
+    for group, tmpl in zip(groups, templates):
+        main_ing = group[0] if group else "재료"
+        all_ings = list(dict.fromkeys(group + tmpl["base_ings"]))
+        recipes.append(
+            Recipe(
+                title=tmpl["title_fmt"].format(main_ing)[:20],
+                time_min=min(payload.constraints.time_limit_min, 15),
+                servings=payload.constraints.servings,
+                summary=tmpl["summary"],
+                image_url=None,
+                ingredients_total=all_ings,
+                ingredients_have=[],
+                ingredients_need=[],
+                steps=tmpl["steps"],
+                tips=tmpl["tips"],
+                warnings=["LLM 연결 실패로 자동 생성된 간이 레시피입니다"],
+            )
+        )
+    return recipes
 
 
 class RecipeLLMAdapter:
@@ -256,6 +278,9 @@ class RecipeLLMAdapter:
                 logger.info(f"LLM 레시피 생성 성공: {len(recipes)}개")
                 return recipes
 
+            except subprocess.TimeoutExpired as e:
+                logger.warning(f"LLM CLI 타임아웃 (시도 {attempt + 1}/{max_retries}), 즉시 폴백: {e}")
+                return fallback_dummy_recipes(payload)
             except Exception as e:
                 logger.warning(f"LLM 생성 실패 (시도 {attempt + 1}/{max_retries}): {str(e)}")
                 if attempt == max_retries - 1:
@@ -527,6 +552,9 @@ class DetailedRecipeLLMAdapter:
                 logger.info(f"[정밀] 레시피 생성 성공: {len(recipes)}개")
                 return recipes
 
+            except subprocess.TimeoutExpired as e:
+                logger.warning(f"[정밀] CLI 타임아웃 (시도 {attempt + 1}/{max_retries}), 즉시 폴백: {e}")
+                return fallback_dummy_recipes(payload)
             except Exception as e:
                 logger.warning(f"[정밀] 생성 실패 (시도 {attempt + 1}/{max_retries}): {str(e)}")
                 if attempt == max_retries - 1:

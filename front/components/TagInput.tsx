@@ -88,6 +88,7 @@ export function TagInput({ value, onChange, placeholder, disabled, id }: TagInpu
           {!disabled && (
             <button
               type="button"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={(e) => {
                 e.stopPropagation();
                 removeTag(i);

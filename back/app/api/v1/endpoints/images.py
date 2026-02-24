@@ -19,7 +19,7 @@ _image_service: ImageSearchService | None = None
 def _get_image_service() -> ImageSearchService:
     global _image_service
     if _image_service is None:
-        _image_service = ImageSearchService()
+        _image_service = ImageSearchService(provider_override="google")
     return _image_service
 
 
