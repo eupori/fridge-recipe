@@ -22,11 +22,14 @@ COPY app ./app
 # Create data directories for image cache (writable by appuser)
 RUN mkdir -p /app/data/images
 
-# Create non-root user
-RUN useradd -r -s /bin/false appuser && chown -R appuser:appuser /app
+# Create non-root user with home directory (Claude CLI needs ~/.claude/)
+RUN useradd -r -m -s /bin/false appuser \
+    && mkdir -p /home/appuser/.claude \
+    && chown -R appuser:appuser /app /home/appuser
 USER appuser
 
 ENV PYTHONPATH="/app"
+ENV HOME="/home/appuser"
 
 EXPOSE 8000
 
