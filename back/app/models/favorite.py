@@ -7,7 +7,7 @@ Favorite model and schemas
 from datetime import datetime
 from uuid import uuid4
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -38,7 +38,7 @@ class FavoriteCreate(BaseModel):
     """즐겨찾기 추가 요청"""
 
     recommendation_id: str
-    recipe_index: int  # 0, 1, 2
+    recipe_index: int = Field(..., ge=0, le=2)  # 0, 1, 2
     recipe_title: str
     recipe_image_url: str | None = None
 
