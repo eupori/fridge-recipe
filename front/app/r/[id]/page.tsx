@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     const firstImage = resolveImageUrl(data.recipes?.[0]?.image_url);
 
     const description = `오머먹 - 냉장고 재료로 만드는 15분 레시피: ${titles}`;
-    const url = `https://eupori.dev/r/${params.id}`;
+    const url = `https://recipe.eupori.dev/r/${params.id}`;
 
     return {
       title: `${titles} | 오머먹`,

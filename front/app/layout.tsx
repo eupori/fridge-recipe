@@ -5,7 +5,7 @@ import { Navbar } from "@/components/Navbar";
 import { BottomNav } from "@/components/BottomNav";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://eupori.dev"),
+  metadataBase: new URL("https://recipe.eupori.dev"),
   title: "오머먹 - 냉장고 재료로 레시피 추천 | 오늘 뭐 먹지?",
   description: "냉장고에 있는 재료를 입력하면 15분 안에 만들 수 있는 레시피 3개를 AI가 추천해줍니다. 자취생, 1인가구를 위한 냉장고 파먹기 레시피.",
 };
