@@ -432,7 +432,7 @@ garnished with fresh herbs, steam rising from the dish."""
     async def _download_image(self, image_url: str, source: str, query: str) -> bytes | None:
         """이미지 URL에서 바이트 다운로드"""
         try:
-            dl_timeout = 10.0 if self.quality_level == "detailed" else 3.0
+            dl_timeout = 10.0 if self.quality_level == "detailed" else 8.0
             async with httpx.AsyncClient(timeout=dl_timeout, follow_redirects=True) as client:
                 resp = await client.get(image_url)
                 resp.raise_for_status()
@@ -477,7 +477,7 @@ garnished with fresh herbs, steam rising from the dish."""
                 )
             }
 
-            scrape_timeout = 10.0 if self.quality_level == "detailed" else 3.0
+            scrape_timeout = 10.0 if self.quality_level == "detailed" else 8.0
             async with httpx.AsyncClient(timeout=scrape_timeout, follow_redirects=True) as client:
                 resp = await client.get(url, headers=headers)
                 resp.raise_for_status()
@@ -596,7 +596,7 @@ garnished with fresh herbs, steam rising from the dish."""
             client = self._get_client()
 
             # 레퍼런스 이미지 확보 시도 (정밀 모드: 15초, 기본: 3초)
-            ref_timeout = 15.0 if self.quality_level == "detailed" else 3.0
+            ref_timeout = 15.0 if self.quality_level == "detailed" else 8.0
             try:
                 reference_bytes = await asyncio.wait_for(
                     self._fetch_reference_image(query), timeout=ref_timeout
@@ -620,7 +620,7 @@ garnished with fresh herbs, steam rising from the dish."""
                 # Imagen 모델: generate_images 사용 (유료 계정 필요)
                 # 레퍼런스 이미지는 Imagen에서 미지원, 텍스트 전용 프롬프트 사용
                 text_only_prompt = self._build_prompt(query, has_reference=False)
-                gemini_timeout = 60.0 if self.quality_level == "detailed" else 15.0
+                gemini_timeout = 60.0 if self.quality_level == "detailed" else 30.0
                 try:
                     response = await asyncio.wait_for(
                         loop.run_in_executor(
@@ -672,7 +672,7 @@ garnished with fresh herbs, steam rising from the dish."""
                 else:
                     contents = prompt
 
-                gemini_timeout = 60.0 if self.quality_level == "detailed" else 15.0
+                gemini_timeout = 60.0 if self.quality_level == "detailed" else 30.0
                 try:
                     response = await asyncio.wait_for(
                         loop.run_in_executor(
