@@ -7,6 +7,7 @@ services:
       - .env.production
     volumes:
       - ./data:/app/data
+      - claude-auth:/home/appuser/.claude
     restart: always
     mem_limit: 512m
     memswap_limit: 768m
@@ -28,3 +29,6 @@ services:
     depends_on:
       - api
     restart: always
+
+volumes:
+  claude-auth:
