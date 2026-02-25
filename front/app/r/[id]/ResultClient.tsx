@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getRecommendation, addFavorite, getRecipeLikeStats, getRecipeImages, resolveImageUrl, RecommendationLikeStats } from "../../../lib/api";
+import { getRecommendation, addFavorite, getRecipeLikeStats, getRecipeImages, resolveImageUrl, RecommendationLikeStats, rateRecipe, getRatingStats, RecommendationRatingStats } from "../../../lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Clock, Users, ChefHat, ShoppingCart, Lightbulb, ChevronDown, ChevronUp, Check, ExternalLink, CircleCheck, Apple, ArrowLeftRight, Archive, Youtube } from "lucide-react";
+import { Clock, Users, ChefHat, ShoppingCart, Lightbulb, ChevronDown, ChevronUp, Check, ExternalLink, CircleCheck, Apple, ArrowLeftRight, Archive, Youtube, Star } from "lucide-react";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { ShareButton } from "@/components/ShareButton";
 import AdUnit from "@/components/AdUnit";
@@ -38,6 +38,7 @@ export default function ResultClient({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(0);
   const [likeStats, setLikeStats] = useState<RecommendationLikeStats | null>(null);
+  const [ratingStats, setRatingStats] = useState<RecommendationRatingStats | null>(null);
   const [pantryItems, setPantryItems] = useState<string[]>([]);
   const [recipeImages, setRecipeImages] = useState<(string | null)[]>([]);
   const [imageLoading, setImageLoading] = useState<boolean[]>([]);
@@ -96,12 +97,14 @@ export default function ResultClient({ id }: { id: string }) {
   useEffect(() => {
     (async () => {
       try {
-        const [rec, stats] = await Promise.all([
+        const [rec, stats, ratings] = await Promise.all([
           getRecommendation(id),
           getRecipeLikeStats(id),
+          getRatingStats(id),
         ]);
         setData(rec);
         setLikeStats(stats);
+        setRatingStats(ratings);
       } catch (e: any) {
         setError(e?.message ?? "불러오기에 실패했습니다");
       }
@@ -222,6 +225,23 @@ export default function ResultClient({ id }: { id: string }) {
         ),
       };
     });
+  };
+
+  const handleRate = async (recipeIndex: number, rating: number) => {
+    try {
+      await rateRecipe(data!.id, recipeIndex, rating);
+      setRatingStats((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          recipes: prev.recipes.map((r) =>
+            r.recipe_index === recipeIndex ? { ...r, my_rating: rating } : r
+          ),
+        };
+      });
+    } catch {
+      // 로그인 필요 등 에러 무시
+    }
   };
 
   if (error) {
@@ -507,6 +527,50 @@ export default function ResultClient({ id }: { id: string }) {
                         </div>
                       </>
                     )}
+
+                    {/* 레시피 평가 */}
+                    <Separator className="my-6" />
+                    <div className="space-y-3">
+                      <h4 className="font-semibold flex items-center gap-2">
+                        <Star className="w-4 h-4" />
+                        레시피 평가
+                      </h4>
+                      <div className="flex items-center gap-3">
+                        <div className="flex gap-1">
+                          {[1, 2, 3, 4, 5].map((star) => {
+                            const myRating = ratingStats?.recipes.find((r) => r.recipe_index === idx)?.my_rating ?? 0;
+                            return (
+                              <button
+                                key={star}
+                                onClick={() => handleRate(idx, star)}
+                                className="p-0.5 transition-colors"
+                                disabled={!user}
+                                title={user ? `${star}점` : "로그인 후 평가할 수 있어요"}
+                              >
+                                <Star
+                                  className={`w-5 h-5 ${
+                                    star <= myRating
+                                      ? "fill-yellow-400 text-yellow-400"
+                                      : "text-muted-foreground/40"
+                                  }`}
+                                />
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {(() => {
+                          const stats = ratingStats?.recipes.find((r) => r.recipe_index === idx);
+                          if (stats && stats.count > 0) {
+                            return (
+                              <span className="text-sm text-muted-foreground">
+                                {stats.average_rating}점 ({stats.count}명)
+                              </span>
+                            );
+                          }
+                          return <span className="text-xs text-muted-foreground">{user ? "첫 번째로 평가해보세요" : "로그인 후 평가 가능"}</span>;
+                        })()}
+                      </div>
+                    </div>
 
                     {/* 정밀 모드: 영양 정보 */}
                     {r.nutrition && (

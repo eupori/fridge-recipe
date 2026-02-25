@@ -414,3 +414,56 @@ export async function clearAllSearchHistories(): Promise<{ deleted_count: number
   }
   return res.json();
 }
+
+// Rating types
+export type RecipeRatingStats = {
+  recipe_index: number;
+  average_rating: number;
+  count: number;
+  my_rating: number | null;
+};
+
+export type RecommendationRatingStats = {
+  recommendation_id: string;
+  recipes: RecipeRatingStats[];
+};
+
+// Rating API
+export async function rateRecipe(
+  recommendationId: string,
+  recipeIndex: number,
+  rating: number
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/ratings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify({
+      recommendation_id: recommendationId,
+      recipe_index: recipeIndex,
+      rating,
+    }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `HTTP ${res.status}`);
+  }
+}
+
+export async function getRatingStats(
+  recommendationId: string
+): Promise<RecommendationRatingStats> {
+  const res = await fetch(`${API_BASE}/ratings/${recommendationId}`, {
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) {
+    return {
+      recommendation_id: recommendationId,
+      recipes: [
+        { recipe_index: 0, average_rating: 0, count: 0, my_rating: null },
+        { recipe_index: 1, average_rating: 0, count: 0, my_rating: null },
+        { recipe_index: 2, average_rating: 0, count: 0, my_rating: null },
+      ],
+    };
+  }
+  return res.json();
+}

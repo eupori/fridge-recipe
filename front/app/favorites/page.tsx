@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Heart, Trash2, ChefHat } from "lucide-react";
+import AdUnit from "@/components/AdUnit";
 
 export default function FavoritesPage() {
   const { user, loading: authLoading } = useAuth();
@@ -126,6 +127,7 @@ export default function FavoritesPage() {
           ))}
         </div>
       )}
+      <AdUnit slot="3692581047" className="mt-6" />
     </main>
   );
 }

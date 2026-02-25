@@ -11,9 +11,8 @@ __pycache__/
 *.pyc
 *.db
 
-# Image cache (large files)
-back/data/images/
-back/data/image_cache.json
+# Data directory (images, cache, crawled data)
+back/data/
 
 # Env
 .env

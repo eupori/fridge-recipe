@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { History, Trash2, ChefHat, Search, ChevronRight, RefreshCw, Clock, Users } from "lucide-react";
 import { formatRelativeTime } from "@/lib/format";
+import AdUnit from "@/components/AdUnit";
 
 export default function HistoryPage() {
   const { user, loading: authLoading } = useAuth();
@@ -256,6 +257,7 @@ export default function HistoryPage() {
           })}
         </div>
       )}
+      <AdUnit slot="7845903215" className="mt-6" />
     </main>
   );
 }
