@@ -20,5 +20,8 @@ sentry-sdk[fastapi]
 gunicorn>=21.2.0
 # YouTube transcript
 youtube-transcript-api>=0.6.0
+# Web Crawling
+beautifulsoup4>=4.12
+lxml>=5.0
 # Development
 ruff

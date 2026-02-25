@@ -30,6 +30,7 @@ from app.services.llm_adapter import (
     QuickRecipeLLMAdapter,
     RecipeLLMAdapter,
 )
+from app.services.reference_service import gather_references
 from app.services.validation import validate_response
 from app.services.youtube_adapter import YouTubeRecipeAdapter
 
@@ -265,13 +266,32 @@ async def create_recommendation(
         quality = payload.constraints.quality_level
         logger.info(f"레시피 Provider: {provider}, Quality: {quality}")
 
+        # 1.5 레퍼런스 수집 (카테고리별 역색인 매칭)
+        reference_context = ""
+        if provider != "mock":
+            try:
+                categories, methods = RecipeLLMAdapter.pick_categories()
+                reference_context = await gather_references(
+                    payload.ingredients,
+                    quality,
+                    exclude=payload.constraints.exclude,
+                    categories=categories,
+                    methods=methods,
+                )
+                if reference_context:
+                    logger.info(f"레퍼런스 수집 완료: {len(reference_context)}자")
+            except Exception as e:
+                logger.warning(f"레퍼런스 수집 실패 (무시): {e}")
+                reference_context = ""
+
         if provider == "mock":
             recipes_raw = MockRecipeLLMAdapter().generate_recipes(payload)
         elif quality == "fast":
             # 번개 모드: Haiku 직접 호출 (subprocess → to_thread)
             try:
                 recipes_raw = await asyncio.to_thread(
-                    QuickRecipeLLMAdapter().generate_recipes, payload
+                    QuickRecipeLLMAdapter().generate_recipes, payload,
+                    reference_context=reference_context
                 )
             except Exception as e:
                 logger.warning(f"[번개] Haiku 실패, 더미 레시피 반환: {e}")
@@ -280,12 +300,14 @@ async def create_recommendation(
             # 정밀 모드: Sonnet 강화 프롬프트 (subprocess → to_thread)
             try:
                 recipes_raw = await asyncio.to_thread(
-                    DetailedRecipeLLMAdapter().generate_recipes, payload
+                    DetailedRecipeLLMAdapter().generate_recipes, payload,
+                    reference_context=reference_context
                 )
             except Exception as e:
                 logger.warning(f"[정밀] Sonnet 실패, 기본 어댑터 폴백: {e}")
                 recipes_raw = await asyncio.to_thread(
-                    RecipeLLMAdapter().generate_recipes, payload
+                    RecipeLLMAdapter().generate_recipes, payload,
+                    reference_context=reference_context
                 )
         elif provider == "youtube":
             try:
@@ -294,7 +316,8 @@ async def create_recommendation(
                 logger.warning(f"YouTube+Haiku 실패, Sonnet 폴백: {e}")
                 try:
                     recipes_raw = await asyncio.to_thread(
-                        RecipeLLMAdapter().generate_recipes, payload
+                        RecipeLLMAdapter().generate_recipes, payload,
+                        reference_context=reference_context
                     )
                 except Exception as e2:
                     logger.error(f"Sonnet 폴백도 실패, 더미 레시피 반환: {e2}")
@@ -302,7 +325,8 @@ async def create_recommendation(
         else:
             # anthropic (기존 동작, subprocess → to_thread)
             recipes_raw = await asyncio.to_thread(
-                RecipeLLMAdapter().generate_recipes, payload
+                RecipeLLMAdapter().generate_recipes, payload,
+                reference_context=reference_context
             )
 
         llm_elapsed = time.monotonic() - start_time

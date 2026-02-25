@@ -176,16 +176,29 @@ class RecipeLLMAdapter:
             hints.append(f"레시피 {i}: {cat} 카테고리 ({method})")
         return "\n".join(hints)
 
+    @staticmethod
+    def pick_categories() -> tuple[list[str], list[str]]:
+        """3개 레시피에 서로 다른 카테고리/메서드 배정 (분리 반환)"""
+        cats = list(RecipeLLMAdapter.RECIPE_CATEGORIES.keys())
+        random.shuffle(cats)
+        selected_cats = cats[:3]
+        selected_methods = [
+            random.choice(RecipeLLMAdapter.RECIPE_CATEGORIES[cat])
+            for cat in selected_cats
+        ]
+        return selected_cats, selected_methods
+
     def __init__(self):
         self.model = "sonnet"
 
-    def generate_recipes(self, payload: RecommendationCreate, max_retries: int = 2) -> list[Recipe]:
+    def generate_recipes(self, payload: RecommendationCreate, max_retries: int = 2, reference_context: str = "") -> list[Recipe]:
         """
         사용자 재료와 제약사항으로 3개 레시피 생성 (재시도 로직 포함)
 
         Args:
             payload: 사용자 입력 (재료, 제약사항)
             max_retries: 최대 재시도 횟수
+            reference_context: 참고 레시피 컨텍스트 (선택)
 
         Returns:
             List[Recipe]: 3개의 레시피 (ingredients_total만 포함, have/need는 별도 처리)
@@ -197,7 +210,7 @@ class RecipeLLMAdapter:
             try:
                 # 1. 프롬프트 구성
                 system_prompt = self._build_system_prompt()
-                user_prompt = self._build_user_prompt(payload)
+                user_prompt = self._build_user_prompt(payload, reference_context=reference_context)
 
                 # 2. Claude Code CLI 호출
                 logger.info(f"LLM 레시피 생성 시도 {attempt + 1}/{max_retries}")
@@ -288,6 +301,9 @@ class RecipeLLMAdapter:
 14. 사용자가 입력한 재료를 최대한 많이 활용하세요
     - 3개 레시피 전체에서 사용자 재료의 80% 이상 사용이 목표입니다
     - 계란, 김치 같은 기본 재료에만 의존하지 말고, 입력된 다양한 재료를 고르게 분배하세요
+15. 참고 레시피가 제공되면 해당 카테고리에 어떤 요리가 있는지 참고만 하세요
+    - 참고 레시피를 따라하거나 비슷하게 만들 필요 없습니다
+    - 사용자 재료로 자유롭게 새로운 레시피를 만드세요
 
 출력 형식:
 JSON 배열로 3개의 레시피를 반환합니다. 각 레시피는 다음 필드를 포함:
@@ -323,7 +339,7 @@ JSON 배열로 3개의 레시피를 반환합니다. 각 레시피는 다음 필
 
 중요: JSON 배열만 출력하고, 다른 설명이나 마크다운은 포함하지 마세요."""
 
-    def _build_user_prompt(self, payload: RecommendationCreate) -> str:
+    def _build_user_prompt(self, payload: RecommendationCreate, reference_context: str = "") -> str:
         """사용자 프롬프트 생성 (카테고리 분배 힌트 포함)"""
         ingredients_str = ", ".join(payload.ingredients)
         tools_str = (
@@ -334,8 +350,14 @@ JSON 배열로 3개의 레시피를 반환합니다. 각 레시피는 다음 필
         expanded_exclude = expand_exclusions(payload.constraints.exclude)
         exclude_str = ", ".join(sorted(expanded_exclude)) if expanded_exclude else "없음"
 
-        # 카테고리 분배 힌트
-        category_hints = self._pick_category_hints()
+        # 통합 포맷: reference_context에 카테고리 힌트 포함
+        if reference_context and reference_context.startswith("카테고리 배정"):
+            category_block = reference_context
+        else:
+            category_hints = self._pick_category_hints()
+            category_block = f"카테고리 배정 (각 레시피는 서로 다른 카테고리):\n{category_hints}"
+            if reference_context:
+                category_block += f"\n\n{reference_context}"
 
         return f"""다음 조건으로 3개의 한국 가정 요리 레시피를 생성해주세요:
 
@@ -345,8 +367,7 @@ JSON 배열로 3개의 레시피를 반환합니다. 각 레시피는 다음 필
 사용 가능 도구: {tools_str}
 제외 재료 (파생 재료 포함): {exclude_str}
 
-카테고리 배정 (각 레시피는 서로 다른 카테고리):
-{category_hints}
+{category_block}
 
 요구사항:
 1. 위 재료를 최대한 활용하되, 부족한 재료는 추가로 표시
@@ -367,12 +388,12 @@ class QuickRecipeLLMAdapter:
     def __init__(self):
         self.model = "haiku"
 
-    def generate_recipes(self, payload: RecommendationCreate, max_retries: int = 1) -> list[Recipe]:
+    def generate_recipes(self, payload: RecommendationCreate, max_retries: int = 1, reference_context: str = "") -> list[Recipe]:
         """빠른 레시피 생성 (Haiku, 재시도 1회)"""
         for attempt in range(max_retries):
             try:
                 system_prompt = self._build_system_prompt()
-                user_prompt = self._build_user_prompt(payload)
+                user_prompt = self._build_user_prompt(payload, reference_context=reference_context)
 
                 logger.info(f"[번개] LLM 레시피 생성 시도 {attempt + 1}/{max_retries} (model={self.model})")
                 content = _call_claude_cli(
@@ -424,6 +445,7 @@ class QuickRecipeLLMAdapter:
 5. 3개 레시피는 서로 다른 카테고리 (밥/국물/반찬/면분식 중 3개)
 6. 조리 단계에 시간(분/초)과 불세기(약불/중불/센불) 반드시 포함
 7. 프라이팬+냄비+전자레인지만 사용 (오븐 없음)
+8. 참고 레시피는 해당 카테고리의 예시일 뿐, 따라하지 말고 자유롭게 만드세요
 
 출력: JSON 배열, 각 레시피:
 - title (15자 이내), time_min, servings, summary
@@ -435,20 +457,25 @@ class QuickRecipeLLMAdapter:
 
 JSON 배열만 출력하세요."""
 
-    def _build_user_prompt(self, payload: RecommendationCreate) -> str:
+    def _build_user_prompt(self, payload: RecommendationCreate, reference_context: str = "") -> str:
         ingredients_str = ", ".join(payload.ingredients)
         expanded_exclude = expand_exclusions(payload.constraints.exclude)
         exclude_str = ", ".join(sorted(expanded_exclude)) if expanded_exclude else "없음"
 
-        # 카테고리 분배 힌트
-        category_hints = RecipeLLMAdapter._pick_category_hints()
+        # 통합 포맷: reference_context에 카테고리 힌트 포함
+        if reference_context and reference_context.startswith("카테고리 배정"):
+            category_block = reference_context
+        else:
+            category_hints = RecipeLLMAdapter._pick_category_hints()
+            category_block = f"카테고리: {category_hints}"
+            if reference_context:
+                category_block += f"\n\n{reference_context}"
 
         return f"""재료: {ingredients_str}
 시간: {payload.constraints.time_limit_min}분 이내
 인분: {payload.constraints.servings}인분
 제외: {exclude_str}
-카테고리: {category_hints}
-
+{category_block}
 3개 레시피를 JSON 배열로 응답하세요. 각 조리 단계에 시간/불세기 포함 필수."""
 
 
@@ -458,12 +485,12 @@ class DetailedRecipeLLMAdapter:
     def __init__(self):
         self.model = "sonnet"
 
-    def generate_recipes(self, payload: RecommendationCreate, max_retries: int = 2) -> list[Recipe]:
+    def generate_recipes(self, payload: RecommendationCreate, max_retries: int = 2, reference_context: str = "") -> list[Recipe]:
         """정밀 레시피 생성 (영양정보, 대체재료, 보관팁 포함)"""
         for attempt in range(max_retries):
             try:
                 system_prompt = self._build_system_prompt()
-                user_prompt = self._build_user_prompt(payload)
+                user_prompt = self._build_user_prompt(payload, reference_context=reference_context)
 
                 logger.info(f"[정밀] LLM 레시피 생성 시도 {attempt + 1}/{max_retries} (model={self.model})")
                 content = _call_claude_cli(
@@ -535,6 +562,9 @@ class DetailedRecipeLLMAdapter:
 13. ingredients_total의 모든 재료는 조리 단계(steps)에서 반드시 사용되어야 합니다
     - 특히 레시피 제목에 포함된 핵심 재료는 조리 단계에서 반드시 언급하세요
 14. 사용자가 입력한 재료를 최대한 많이 활용하세요 (3개 레시피 전체에서 80% 이상)
+15. 참고 레시피가 제공되면 해당 카테고리에 어떤 요리가 있는지 참고만 하세요
+    - 참고 레시피를 따라하거나 비슷하게 만들 필요 없습니다
+    - 사용자 재료로 자유롭게 새로운 레시피를 만드세요
 
 추가 출력 필드 (정밀 모드):
 - nutrition: 영양 정보 객체 (calories, protein, carbs, fat)
@@ -557,7 +587,7 @@ JSON 배열로 3개의 레시피를 반환합니다. 각 레시피는 다음 필
 
 중요: JSON 배열만 출력하고, 다른 설명이나 마크다운은 포함하지 마세요."""
 
-    def _build_user_prompt(self, payload: RecommendationCreate) -> str:
+    def _build_user_prompt(self, payload: RecommendationCreate, reference_context: str = "") -> str:
         ingredients_str = ", ".join(payload.ingredients)
         tools_str = (
             ", ".join(payload.constraints.tools) if payload.constraints.tools else "모든 도구 가능"
@@ -565,8 +595,14 @@ JSON 배열로 3개의 레시피를 반환합니다. 각 레시피는 다음 필
         expanded_exclude = expand_exclusions(payload.constraints.exclude)
         exclude_str = ", ".join(sorted(expanded_exclude)) if expanded_exclude else "없음"
 
-        # 카테고리 분배 힌트
-        category_hints = RecipeLLMAdapter._pick_category_hints()
+        # 통합 포맷: reference_context에 카테고리 힌트 포함
+        if reference_context and reference_context.startswith("카테고리 배정"):
+            category_block = reference_context
+        else:
+            category_hints = RecipeLLMAdapter._pick_category_hints()
+            category_block = f"카테고리 배정 (각 레시피는 서로 다른 카테고리):\n{category_hints}"
+            if reference_context:
+                category_block += f"\n\n{reference_context}"
 
         return f"""다음 조건으로 3개의 상세 레시피를 생성해주세요:
 
@@ -576,8 +612,7 @@ JSON 배열로 3개의 레시피를 반환합니다. 각 레시피는 다음 필
 사용 가능 도구: {tools_str}
 제외 재료 (파생 재료 포함): {exclude_str}
 
-카테고리 배정 (각 레시피는 서로 다른 카테고리):
-{category_hints}
+{category_block}
 
 요구사항:
 1. 위 재료를 최대한 활용하되, 부족한 재료는 추가로 표시
