@@ -22,10 +22,8 @@ if settings.sentry_dsn:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """앱 시작 시 DB 테이블 생성 + 레퍼런스 역색인 빌드"""
+    """앱 시작 시 DB 테이블 생성"""
     create_tables()
-    from app.services.reference_service import _index
-    _index.load()
     yield
 
 
