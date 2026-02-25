@@ -102,7 +102,12 @@ class ReferenceIndex:
                 f"{len(self._ing_to_ids)}개 재료 키"
             )
         else:
-            from app.data.reference_recipes import REFERENCE_RECIPES
+            try:
+                from app.data.reference_recipes import REFERENCE_RECIPES
+            except ImportError:
+                logger.warning("하드코딩 레퍼런스 파일 없음, 빈 인덱스로 시작")
+                self._loaded = True
+                return
 
             for i, r in enumerate(REFERENCE_RECIPES):
                 self._index_recipe(-(i + 1), r)
