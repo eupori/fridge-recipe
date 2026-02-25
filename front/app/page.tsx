@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TagInput } from "@/components/TagInput";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChefHat, Clock, Users, Utensils, Loader2, Package, History, RefreshCw, ChevronRight, User, SlidersHorizontal, ChevronDown, ChevronUp, AlertCircle, LogIn, X, Zap, Sparkles } from "lucide-react";
+import { ChefHat, Clock, Users, Utensils, Loader2, Package, History, RefreshCw, ChevronRight, User, SlidersHorizontal, ChevronDown, ChevronUp, AlertCircle, LogIn, X } from "lucide-react";
 import RecipeLoadingOverlay from "@/components/RecipeLoadingOverlay";
 import { Onboarding } from "@/components/Onboarding";
 import AdUnit from "@/components/AdUnit";
@@ -67,7 +67,6 @@ function HomePageContent() {
   const [timeLimit, setTimeLimit] = usePersistedState("recipe-time-limit", 15);
   const [servings, setServings] = usePersistedState("recipe-servings", 1);
   const [tools, setTools] = usePersistedState<string[]>("recipe-tools", ["프라이팬"]);
-  const [qualityLevel, setQualityLevel] = usePersistedState("recipe-quality", "standard");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
@@ -153,7 +152,6 @@ function HomePageContent() {
           servings: history.servings,
           tools,
           exclude: [],
-          quality_level: qualityLevel,
         },
       });
       if (result._dailyRemaining !== undefined) {
@@ -166,6 +164,7 @@ function HomePageContent() {
       }
 
       if (result.job_id) {
+        sessionStorage.setItem("active-job-id", result.job_id);
         pollJob(result.job_id);
       }
     } catch (e: any) {
@@ -197,15 +196,19 @@ function HomePageContent() {
 
         if (status.status === "completed" && status.recommendation_id) {
           clearInterval(poll);
+          sessionStorage.removeItem("active-job-id");
+          window.dispatchEvent(new CustomEvent("recipe-ready", { detail: { id: status.recommendation_id } }));
           router.push(`/r/${status.recommendation_id}`);
         } else if (status.status === "failed") {
           clearInterval(poll);
+          sessionStorage.removeItem("active-job-id");
           setError(status.error || "레시피 생성에 실패했습니다.");
           setLoading(false);
           setProgress(0);
         }
       } catch {
         clearInterval(poll);
+        sessionStorage.removeItem("active-job-id");
         setError("작업 상태를 확인할 수 없습니다.");
         setLoading(false);
         setProgress(0);
@@ -232,7 +235,6 @@ function HomePageContent() {
           servings,
           tools,
           exclude,
-          quality_level: qualityLevel,
         },
       });
 
@@ -249,6 +251,7 @@ function HomePageContent() {
 
       // 캐시 미스 → 폴링
       if (result.job_id) {
+        sessionStorage.setItem("active-job-id", result.job_id);
         pollJob(result.job_id);
       }
     } catch (e: any) {
@@ -262,7 +265,17 @@ function HomePageContent() {
       setLoading(false);
       setProgress(0);
     }
-  }, [excludeText, ingredients, timeLimit, servings, tools, qualityLevel, pollJob]);
+  }, [excludeText, ingredients, timeLimit, servings, tools, pollJob]);
+
+  // 페이지 복귀 시 진행 중인 작업 복원
+  useEffect(() => {
+    const savedJobId = sessionStorage.getItem("active-job-id");
+    if (savedJobId && !loading) {
+      setLoading(true);
+      pollJob(savedJobId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // autoSearch 파라미터가 있으면 자동으로 검색 실행
   useEffect(() => {
@@ -293,7 +306,7 @@ function HomePageContent() {
   return (
     <main className="container max-w-3xl mx-auto py-10 px-4">
       <Onboarding />
-      <RecipeLoadingOverlay loading={loading} qualityLevel={qualityLevel} />
+      <RecipeLoadingOverlay loading={loading} />
       <div className="text-center mb-8">
         <div className="flex items-center justify-center gap-2 mb-4">
           <ChefHat className="w-10 h-10 text-primary" />
@@ -406,42 +419,6 @@ function HomePageContent() {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          {/* 추천 방식 세그먼트 컨트롤 */}
-          <div className="space-y-2">
-            <Label className="text-sm">추천 방식</Label>
-            <div className="bg-muted rounded-lg p-1 flex gap-1" role="radiogroup" aria-label="추천 방식 선택">
-              {([
-                { value: "fast" as const, icon: Zap, label: "번개", time: "~5초" },
-                { value: "standard" as const, icon: ChefHat, label: "기본", time: "~20초" },
-                { value: "detailed" as const, icon: Sparkles, label: "정밀", time: "~30초" },
-              ]).map(({ value, icon: Icon, label, time }) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="radio"
-                  aria-checked={qualityLevel === value}
-                  aria-label={`${label} 모드 (${time})`}
-                  onClick={() => setQualityLevel(value)}
-                  disabled={loading}
-                  className={`flex-1 flex flex-col items-center gap-0.5 py-2 px-2 rounded-md text-sm font-medium transition-all ${
-                    qualityLevel === value
-                      ? "bg-card shadow-sm text-foreground ring-1 ring-border"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{label}</span>
-                  <span className="text-xs font-normal">{time}</span>
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {qualityLevel === "fast" && "이미지 없이 빠르게 레시피를 추천해요"}
-              {qualityLevel === "standard" && "AI 이미지와 함께 맞춤 레시피를 추천해요"}
-              {qualityLevel === "detailed" && "고품질 이미지, 영양 정보, 대체 재료, 보관 팁까지 포함해요"}
-            </p>
           </div>
 
           <button

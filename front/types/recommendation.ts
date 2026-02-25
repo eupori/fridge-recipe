@@ -41,7 +41,6 @@ export interface ShoppingItem {
 export interface Recommendation {
   id: string;
   created_at: string;
-  quality_level?: string;
   recipes: Recipe[];
   shopping_list: ShoppingItem[];
 }

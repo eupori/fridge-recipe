@@ -389,14 +389,9 @@ class GeminiImageGenerationAdapter(ImageSearchAdapter):
     비용: 약 $0.02-0.04/이미지 (standard), $0.06/이미지 (detailed)
     """
 
-    def __init__(self, quality_level: str = "standard"):
+    def __init__(self):
         self.api_key = settings.gemini_api_key
-        self.quality_level = quality_level
-        # 정밀 모드: 고품질 모델 사용
-        if quality_level == "detailed":
-            self.model = settings.gemini_detailed_image_model
-        else:
-            self.model = settings.gemini_image_model
+        self.model = settings.gemini_image_model
         self.timeout = settings.image_search_timeout
         self._client = None
 
@@ -456,47 +451,28 @@ class GeminiImageGenerationAdapter(ImageSearchAdapter):
         """
         english_name = self._get_english_name(recipe_title)
 
-        # 정밀 모드: 음식 유형별 앵글 + 강화 프롬프트
-        if self.quality_level == "detailed":
-            angle = self._get_food_angle(recipe_title)
-            if has_reference:
-                prompt = (
-                    f"A photorealistic {angle} of {recipe_title} ({english_name}). "
-                    f"The attached image shows a similar real dish for reference. "
-                    f"Generate a new photorealistic image with warm natural lighting, "
-                    f"appetizing food photography style, shallow depth of field, "
-                    f"steam rising gently, high-resolution. "
-                    f"Do NOT copy the reference exactly - create a fresh, realistic photo."
-                )
-            else:
-                prompt = (
-                    f"A photorealistic {angle} of {recipe_title} ({english_name}). "
-                    f"Warm natural lighting, appetizing food photography style, "
-                    f"shallow depth of field, steam rising gently, high-resolution. "
-                    f"Korean cuisine, beautiful ceramic plate, restaurant-quality plating."
-                )
-            return prompt
-
         if has_reference:
             prompt = f"""Create a realistic food photo of {recipe_title} ({english_name}).
 The attached image shows a similar real dish for reference.
 Generate a new photorealistic image of this Korean dish with:
 natural lighting, top-down angle, ceramic plate,
 appetizing colors, restaurant-quality plating, shallow depth of field.
-Do NOT copy the reference exactly - create a fresh, realistic photo."""
+Do NOT copy the reference exactly - create a fresh, realistic photo.
+IMPORTANT: Do NOT include any text, letters, words, watermarks, logos, or labels in the image. The image must contain only the food and tableware, absolutely no text overlay."""
         else:
             prompt = f"""Professional food photography of {recipe_title} ({english_name}).
 Korean cuisine, appetizing presentation, warm natural lighting,
 top-down view on a beautiful ceramic plate, restaurant quality,
 high resolution, photorealistic, shallow depth of field,
-garnished with fresh herbs, steam rising from the dish."""
+garnished with fresh herbs, steam rising from the dish.
+IMPORTANT: Do NOT include any text, letters, words, watermarks, logos, or labels in the image. The image must contain only the food and tableware, absolutely no text overlay."""
 
         return prompt
 
     async def _download_image(self, image_url: str, source: str, query: str) -> bytes | None:
         """이미지 URL에서 바이트 다운로드"""
         try:
-            dl_timeout = 10.0 if self.quality_level == "detailed" else 8.0
+            dl_timeout = 8.0
             async with httpx.AsyncClient(timeout=dl_timeout, follow_redirects=True) as client:
                 resp = await client.get(image_url)
                 resp.raise_for_status()
@@ -541,7 +517,7 @@ garnished with fresh herbs, steam rising from the dish."""
                 )
             }
 
-            scrape_timeout = 10.0 if self.quality_level == "detailed" else 8.0
+            scrape_timeout = 8.0
             async with httpx.AsyncClient(timeout=scrape_timeout, follow_redirects=True) as client:
                 resp = await client.get(url, headers=headers)
                 resp.raise_for_status()
@@ -660,7 +636,7 @@ garnished with fresh herbs, steam rising from the dish."""
             client = self._get_client()
 
             # 레퍼런스 이미지 확보 시도 (정밀 모드: 15초, 기본: 3초)
-            ref_timeout = 15.0 if self.quality_level == "detailed" else 8.0
+            ref_timeout = 8.0
             try:
                 reference_bytes = await asyncio.wait_for(
                     self._fetch_reference_image(query), timeout=ref_timeout
@@ -684,7 +660,7 @@ garnished with fresh herbs, steam rising from the dish."""
                 # Imagen 모델: generate_images 사용 (유료 계정 필요)
                 # 레퍼런스 이미지는 Imagen에서 미지원, 텍스트 전용 프롬프트 사용
                 text_only_prompt = self._build_prompt(query, has_reference=False)
-                gemini_timeout = 60.0 if self.quality_level == "detailed" else 30.0
+                gemini_timeout = 30.0
                 try:
                     response = await asyncio.wait_for(
                         loop.run_in_executor(
@@ -736,7 +712,7 @@ garnished with fresh herbs, steam rising from the dish."""
                 else:
                     contents = prompt
 
-                gemini_timeout = 60.0 if self.quality_level == "detailed" else 30.0
+                gemini_timeout = 30.0
                 try:
                     response = await asyncio.wait_for(
                         loop.run_in_executor(
@@ -803,15 +779,14 @@ class ImageSearchService:
     IMAGES_DIR = DATA_DIR / "images"
     MAX_CACHE_ENTRIES = 1000
 
-    def __init__(self, quality_level: str = "standard", provider_override: str | None = None):
+    def __init__(self, provider_override: str | None = None):
         # Primary provider 선택
         provider = (provider_override or settings.image_search_provider).lower()
-        self.quality_level = quality_level
 
         if provider == "google":
             self.primary = GoogleImageSearchAdapter()
         elif provider == "gemini":
-            self.primary = GeminiImageGenerationAdapter(quality_level=quality_level)
+            self.primary = GeminiImageGenerationAdapter()
         elif provider == "unsplash":
             self.primary = UnsplashImageSearchAdapter()
         elif provider == "mock":
@@ -820,10 +795,8 @@ class ImageSearchService:
             logger.warning(f"알 수 없는 provider '{provider}', Unsplash 사용")
             self.primary = UnsplashImageSearchAdapter()
 
-        # Fallback: Gemini 정밀 모드 실패 시 기존 모델로 폴백
-        if provider == "gemini" and quality_level == "detailed":
-            self.fallback = GeminiImageGenerationAdapter(quality_level="standard")
-        elif provider not in ("mock", "gemini"):
+        # Fallback
+        if provider not in ("mock", "gemini"):
             self.fallback = UnsplashImageSearchAdapter()
         else:
             self.fallback = None
@@ -985,9 +958,7 @@ class ImageSearchService:
         self._save_cache()
 
     def _cache_key(self, recipe_title: str) -> str:
-        """quality_level을 포함한 캐시 키 생성"""
-        if self.quality_level != "standard":
-            return f"{recipe_title}::{self.quality_level}"
+        """캐시 키 생성"""
         return recipe_title
 
     async def get_image(self, recipe_title: str) -> str | None:

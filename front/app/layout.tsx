@@ -3,6 +3,7 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { Navbar } from "@/components/Navbar";
 import { BottomNav } from "@/components/BottomNav";
+import RecipeReadyToast from "@/components/RecipeReadyToast";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://recipe.eupori.dev"),
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Navbar />
           {children}
           <BottomNav />
+          <RecipeReadyToast />
         </AuthProvider>
       </body>
     </html>

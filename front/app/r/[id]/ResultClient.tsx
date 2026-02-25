@@ -115,9 +115,6 @@ export default function ResultClient({ id }: { id: string }) {
     const recipes = data.recipes;
     setRecipeImages(recipes.map((r: Recipe) => resolveImageUrl(r.image_url)));
 
-    // 번개 모드: 이미지 비동기 로드 스킵 (비용 절감)
-    if (data.quality_level === "fast") return;
-
     const missingRecipes = recipes
       .map((r: Recipe, i: number) => (!r.image_url ? { index: i, title: r.title } : null))
       .filter((x): x is { index: number; title: string } => x !== null);

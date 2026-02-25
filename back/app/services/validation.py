@@ -160,13 +160,7 @@ def validate_response(resp: RecommendationResponse, req: RecommendationCreate) -
             if e and e in text_blob:
                 raise ValueError(f"exclude_ingredient_detected: {e}")
 
-        quality = req.constraints.quality_level
-        if quality == "fast":
-            valid_steps = 2 <= len(r.steps) <= 8
-        elif quality == "detailed":
-            valid_steps = 4 <= len(r.steps) <= 12
-        else:
-            valid_steps = 4 <= len(r.steps) <= 8
+        valid_steps = 4 <= len(r.steps) <= 10
 
         if not valid_steps:
             raise ValueError("steps_length_invalid")
@@ -184,8 +178,6 @@ def validate_response(resp: RecommendationResponse, req: RecommendationCreate) -
 
     # --- soft validations (경고 + 캐시 스킵, hard error 아님) ---
     try:
-        quality = req.constraints.quality_level
-
         # S1. 재료 사용률
         for r in resp.recipes:
             usage = _check_ingredient_usage_rate(r)
@@ -198,14 +190,9 @@ def validate_response(resp: RecommendationResponse, req: RecommendationCreate) -
         # S2. 조리 단계 구체성
         for r in resp.recipes:
             spec = _check_step_specificity(r.steps)
-            if quality in ("standard", "detailed") and spec["time_ratio"] < 0.5:
+            if spec["time_ratio"] < 0.5:
                 logger.warning(
                     f"[품질] '{r.title}' 시간 표현 {spec['time_ratio']:.0%} (50% 미만) → 캐시 스킵"
-                )
-                resp._skip_cache = True  # type: ignore[attr-defined]
-            if quality == "detailed" and spec["heat_ratio"] < 0.5:
-                logger.warning(
-                    f"[품질] '{r.title}' 불세기 표현 {spec['heat_ratio']:.0%} (50% 미만) → 캐시 스킵"
                 )
                 resp._skip_cache = True  # type: ignore[attr-defined]
 
