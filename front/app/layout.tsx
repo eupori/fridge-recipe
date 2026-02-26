@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
+import { RecipeJobProvider } from "@/lib/recipe-job-context";
 import { Navbar } from "@/components/Navbar";
 import { BottomNav } from "@/components/BottomNav";
+import FloatingJobIndicator from "@/components/FloatingJobIndicator";
 import RecipeReadyToast from "@/components/RecipeReadyToast";
 
 export const metadata: Metadata = {
@@ -53,10 +55,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="font-noto antialiased pb-14 sm:pb-0">
         <AuthProvider>
-          <Navbar />
-          {children}
-          <BottomNav />
-          <RecipeReadyToast />
+          <RecipeJobProvider>
+            <Navbar />
+            {children}
+            <BottomNav />
+            <FloatingJobIndicator />
+            <RecipeReadyToast />
+          </RecipeJobProvider>
         </AuthProvider>
       </body>
     </html>

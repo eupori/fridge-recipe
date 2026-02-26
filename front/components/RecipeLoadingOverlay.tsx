@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ChefHat } from "lucide-react";
+import { ChefHat, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const STANDARD_STAGES = [
   { until: 3, message: "AI가 재료 조합을 분석 중...", progress: 15 },
@@ -139,6 +140,127 @@ const QUIZ_POOL: Quiz[] = [
     answerIndex: 2,
     explanation: "문 쪽은 온도 변화가 커서 안쪽이 좋아요",
   },
+  // 추가 퀴즈 20개
+  {
+    question: "고추의 매운맛을 줄이려면?",
+    options: ["씨를 제거한다", "물에 담근다", "냉동한다"],
+    answerIndex: 0,
+    explanation: "씨와 태좌에 캡사이신이 집중되어 있어요",
+  },
+  {
+    question: "콩나물국 끓일 때 뚜껑을 열면 안 되는 이유는?",
+    options: ["비린내가 남아서", "영양이 빠져서", "빨리 식어서"],
+    answerIndex: 0,
+    explanation: "뚜껑을 열면 비린내가 빠지지 않고 남아요",
+  },
+  {
+    question: "생선 비린내를 잡는 대표적인 재료는?",
+    options: ["레몬즙", "식초", "생강"],
+    answerIndex: 2,
+    explanation: "생강의 향 성분이 비린내를 효과적으로 잡아줘요",
+  },
+  {
+    question: "숙주나물을 아삭하게 데치는 시간은?",
+    options: ["10초", "30초", "2분"],
+    answerIndex: 1,
+    explanation: "30초면 아삭한 식감을 유지하면서 익혀요",
+  },
+  {
+    question: "국물 요리에 주로 사용하는 간장은?",
+    options: ["진간장", "국간장", "양조간장"],
+    answerIndex: 1,
+    explanation: "국간장은 색이 연하고 짠맛이 강해 국물에 적합해요",
+  },
+  {
+    question: "김밥 밥에 참기름을 넣는 이유는?",
+    options: ["맛을 위해", "밥알이 안 붙게", "색깔을 위해"],
+    answerIndex: 1,
+    explanation: "참기름이 밥알 사이를 코팅해 달라붙지 않아요",
+  },
+  {
+    question: "전을 바삭하게 부치는 비결은?",
+    options: ["기름을 많이 넣기", "반죽을 얇게 펴기", "센 불로 빠르게"],
+    answerIndex: 1,
+    explanation: "반죽을 얇게 펴면 수분이 빠르게 증발해 바삭해요",
+  },
+  {
+    question: "냉동 고기를 해동하는 가장 좋은 방법은?",
+    options: ["전자레인지", "흐르는 물", "냉장실 해동"],
+    answerIndex: 2,
+    explanation: "냉장실에서 천천히 해동하면 육즙 손실이 적어요",
+  },
+  {
+    question: "찌개와 국의 가장 큰 차이는?",
+    options: ["국이 더 진하다", "찌개가 건더기 위주", "조리 온도가 다르다"],
+    answerIndex: 1,
+    explanation: "찌개는 건더기 위주, 국은 국물 위주예요",
+  },
+  {
+    question: "높은 온도 조리에 더 적합한 기름은?",
+    options: ["식용유", "올리브유", "들기름"],
+    answerIndex: 0,
+    explanation: "식용유는 발연점이 높아 튀김이나 볶음에 적합해요",
+  },
+  {
+    question: "팥을 삶을 때 첫 물을 버리는 이유는?",
+    options: ["사포닌 제거", "색을 예쁘게", "더 빨리 익으라고"],
+    answerIndex: 0,
+    explanation: "첫 물에 사포닌과 떫은맛 성분이 빠져나와요",
+  },
+  {
+    question: "미역국을 끓일 때 미역을 먼저 볶는 이유는?",
+    options: ["식감을 위해", "감칠맛을 위해", "색을 위해"],
+    answerIndex: 1,
+    explanation: "기름에 볶으면 감칠맛이 더 깊어져요",
+  },
+  {
+    question: "계란찜을 부드럽게 만드는 비결은?",
+    options: ["물을 1:1로 넣기", "우유를 넣기", "센 불로 빠르게"],
+    answerIndex: 0,
+    explanation: "계란과 물을 1:1로 넣으면 부드러운 찜이 돼요",
+  },
+  {
+    question: "고구마를 가장 달게 먹는 조리법은?",
+    options: ["삶기", "찌기", "굽기"],
+    answerIndex: 2,
+    explanation: "천천히 구우면 전분이 당으로 변해 더 달아요",
+  },
+  {
+    question: "양배추를 칼 대신 손으로 찢으면 좋은 이유는?",
+    options: ["양념이 잘 배서", "세포 파괴가 적어서", "모양이 예뻐서"],
+    answerIndex: 1,
+    explanation: "세포 파괴가 적어 쓴맛이 덜 나요",
+  },
+  {
+    question: "볶음밥을 맛있게 하는 핵심은?",
+    options: ["센 불 + 빠르게", "약불 + 천천히", "중불 + 뚜껑"],
+    answerIndex: 0,
+    explanation: "센 불에서 빠르게 볶아야 감칠맛이 살아요",
+  },
+  {
+    question: "국수를 삶은 후 찬물에 헹구는 이유는?",
+    options: ["전분 제거", "맛을 위해", "빨리 식히려고"],
+    answerIndex: 0,
+    explanation: "전분을 씻어내면 면이 쫄깃하고 안 불어요",
+  },
+  {
+    question: "밀가루 반죽을 숙성시키는 이유는?",
+    options: ["글루텐 이완", "발효", "수분 증발"],
+    answerIndex: 0,
+    explanation: "글루텐이 이완되어 반죽이 부드러워져요",
+  },
+  {
+    question: "쌈장과 된장의 차이는?",
+    options: ["된장이 더 짜다", "쌈장에 고추장이 섞임", "같은 것이다"],
+    answerIndex: 1,
+    explanation: "쌈장은 된장에 고추장, 참기름 등을 섞어 만들어요",
+  },
+  {
+    question: "무를 갈아서 고기 재울 때 효과는?",
+    options: ["색이 예뻐진다", "고기가 부드러워진다", "보관이 오래된다"],
+    answerIndex: 1,
+    explanation: "무의 효소가 단백질을 분해해 고기를 연하게 해요",
+  },
 ];
 
 function shuffleIndices(length: number): number[] {
@@ -150,11 +272,18 @@ function shuffleIndices(length: number): number[] {
   return arr;
 }
 
-interface RecipeLoadingOverlayProps {
-  loading: boolean;
+function formatElapsed(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export default function RecipeLoadingOverlay({ loading }: RecipeLoadingOverlayProps) {
+interface RecipeLoadingOverlayProps {
+  loading: boolean;
+  onDismiss?: () => void;
+}
+
+export default function RecipeLoadingOverlay({ loading, onDismiss }: RecipeLoadingOverlayProps) {
   const [elapsed, setElapsed] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -165,19 +294,31 @@ export default function RecipeLoadingOverlay({ loading }: RecipeLoadingOverlayPr
   const [score, setScore] = useState(0);
   const [fading, setFading] = useState(false);
 
+  // Dismiss 버튼 표시 여부 (10초 후)
+  const [showDismiss, setShowDismiss] = useState(false);
+
   // Elapsed timer
   useEffect(() => {
     if (!loading) {
       setElapsed(0);
+      setShowDismiss(false);
       return;
     }
     setElapsed(0);
+    setShowDismiss(false);
     intervalRef.current = setInterval(() => {
       setElapsed((prev) => prev + 0.5);
     }, 500);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
+  }, [loading]);
+
+  // 10초 후 닫기 버튼 표시
+  useEffect(() => {
+    if (!loading) return;
+    const timer = setTimeout(() => setShowDismiss(true), 10000);
+    return () => clearTimeout(timer);
   }, [loading]);
 
   // Quiz initialization
@@ -238,6 +379,13 @@ export default function RecipeLoadingOverlay({ loading }: RecipeLoadingOverlayPr
           />
         </div>
 
+        {/* Timer + estimated time */}
+        <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
+          <span>{formatElapsed(elapsed)} 경과</span>
+          <span className="text-border">|</span>
+          <span>보통 1~2분 소요</span>
+        </div>
+
         {/* Divider */}
         <div className="w-full border-t border-border" />
 
@@ -284,6 +432,19 @@ export default function RecipeLoadingOverlay({ loading }: RecipeLoadingOverlayPr
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">모든 퀴즈를 풀었어요! 🎉</p>
+        )}
+
+        {/* Dismiss button (10초 후 표시) */}
+        {showDismiss && onDismiss && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onDismiss}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X className="w-4 h-4 mr-1" />
+            닫고 둘러보기
+          </Button>
         )}
       </div>
     </div>

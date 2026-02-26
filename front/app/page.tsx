@@ -3,8 +3,9 @@
 import { Suspense, useMemo, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { createRecommendationAsync, getJobStatus, getSearchHistories, getStats, SearchHistoryResponse, StatsResponse, RateLimitError } from "../lib/api";
+import { createRecommendationAsync, getSearchHistories, getStats, SearchHistoryResponse, StatsResponse, RateLimitError } from "../lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { useRecipeJob } from "@/lib/recipe-job-context";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,6 +61,7 @@ function HomePageLoading() {
 
 function HomePageContent() {
   const { user, loading: authLoading } = useAuth();
+  const { isProcessing, error: jobError, startJob, clearJob } = useRecipeJob();
   const searchParams = useSearchParams();
   const router = useRouter();
   const [ingredientsText, setIngredientsText] = usePersistedState("recipe-ingredients", "계란, 김치, 양파");
@@ -67,9 +69,9 @@ function HomePageContent() {
   const [timeLimit, setTimeLimit] = usePersistedState("recipe-time-limit", 15);
   const [servings, setServings] = usePersistedState("recipe-servings", 1);
   const [tools, setTools] = usePersistedState<string[]>("recipe-tools", ["프라이팬"]);
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [showOverlay, setShowOverlay] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
   const [pantryItems, setPantryItems] = useState<string[]>([]);
   const [recentHistories, setRecentHistories] = useState<SearchHistoryResponse[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -77,6 +79,19 @@ function HomePageContent() {
   const [rateLimited, setRateLimited] = useState(false);
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [showLoginBanner, setShowLoginBanner] = useState(false);
+
+  const loading = submitting || isProcessing;
+  const displayError = error || jobError;
+
+  // context가 처리 중이면 오버레이 표시 (페이지 복귀 시 복원 포함)
+  useEffect(() => {
+    if (isProcessing) setShowOverlay(true);
+  }, [isProcessing]);
+
+  // context 에러 발생 시 오버레이 숨김
+  useEffect(() => {
+    if (jobError) setShowOverlay(false);
+  }, [jobError]);
 
   // 비로그인 배너 표시 여부
   useEffect(() => {
@@ -134,6 +149,8 @@ function HomePageContent() {
 
   // 검색 기록에서 재료 불러오기 (다시 검색) - 바로 검색 실행
   const loadFromHistory = async (history: SearchHistoryResponse) => {
+    if (isProcessing) return;
+
     // 폼 상태 업데이트 (UI 반영용)
     setIngredientsText(history.ingredients.join(", "));
     setTimeLimit(history.time_limit_min);
@@ -142,8 +159,9 @@ function HomePageContent() {
     // 바로 검색 실행 (history 값 직접 사용)
     setError(null);
     setRateLimited(false);
-    setLoading(true);
-    setProgress(0);
+    setSubmitting(true);
+    setShowOverlay(true);
+    clearJob();
     try {
       const result = await createRecommendationAsync({
         ingredients: history.ingredients,
@@ -164,8 +182,7 @@ function HomePageContent() {
       }
 
       if (result.job_id) {
-        sessionStorage.setItem("active-job-id", result.job_id);
-        pollJob(result.job_id);
+        startJob(result.job_id);
       }
     } catch (e: any) {
       if (e instanceof RateLimitError) {
@@ -175,9 +192,9 @@ function HomePageContent() {
       } else {
         setError(e?.message ?? "요청에 실패했습니다");
       }
-      setLoading(false);
-      setProgress(0);
+      setShowOverlay(false);
     }
+    setSubmitting(false);
   };
 
   const ingredients = useMemo(() => {
@@ -187,41 +204,14 @@ function HomePageContent() {
       .filter(Boolean);
   }, [ingredientsText]);
 
-  // 폴링 공통 로직
-  const pollJob = useCallback(async (jobId: string) => {
-    const poll = setInterval(async () => {
-      try {
-        const status = await getJobStatus(jobId);
-        setProgress(status.progress);
-
-        if (status.status === "completed" && status.recommendation_id) {
-          clearInterval(poll);
-          sessionStorage.removeItem("active-job-id");
-          window.dispatchEvent(new CustomEvent("recipe-ready", { detail: { id: status.recommendation_id } }));
-          router.push(`/r/${status.recommendation_id}`);
-        } else if (status.status === "failed") {
-          clearInterval(poll);
-          sessionStorage.removeItem("active-job-id");
-          setError(status.error || "레시피 생성에 실패했습니다.");
-          setLoading(false);
-          setProgress(0);
-        }
-      } catch {
-        clearInterval(poll);
-        sessionStorage.removeItem("active-job-id");
-        setError("작업 상태를 확인할 수 없습니다.");
-        setLoading(false);
-        setProgress(0);
-      }
-    }, 2000);
-  }, [router]);
-
   // onSubmit을 useCallback으로 정의하여 autoSearch useEffect에서 사용
   const onSubmit = useCallback(async () => {
+    if (isProcessing) return;
     setError(null);
     setRateLimited(false);
-    setLoading(true);
-    setProgress(0);
+    setSubmitting(true);
+    setShowOverlay(true);
+    clearJob();
     try {
       const exclude = excludeText
         .split(/,|\n/)
@@ -249,10 +239,9 @@ function HomePageContent() {
         return;
       }
 
-      // 캐시 미스 → 폴링
+      // 캐시 미스 → context에서 폴링
       if (result.job_id) {
-        sessionStorage.setItem("active-job-id", result.job_id);
-        pollJob(result.job_id);
+        startJob(result.job_id);
       }
     } catch (e: any) {
       if (e instanceof RateLimitError) {
@@ -262,20 +251,10 @@ function HomePageContent() {
       } else {
         setError(e?.message ?? "요청에 실패했습니다");
       }
-      setLoading(false);
-      setProgress(0);
+      setShowOverlay(false);
     }
-  }, [excludeText, ingredients, timeLimit, servings, tools, pollJob]);
-
-  // 페이지 복귀 시 진행 중인 작업 복원
-  useEffect(() => {
-    const savedJobId = sessionStorage.getItem("active-job-id");
-    if (savedJobId && !loading) {
-      setLoading(true);
-      pollJob(savedJobId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setSubmitting(false);
+  }, [excludeText, ingredients, timeLimit, servings, tools, isProcessing, startJob, clearJob, router]);
 
   // autoSearch 파라미터가 있으면 자동으로 검색 실행
   useEffect(() => {
@@ -306,7 +285,10 @@ function HomePageContent() {
   return (
     <main className="container max-w-3xl mx-auto py-10 px-4">
       <Onboarding />
-      <RecipeLoadingOverlay loading={loading} />
+      <RecipeLoadingOverlay
+        loading={showOverlay && loading}
+        onDismiss={() => setShowOverlay(false)}
+      />
       <div className="text-center mb-8">
         <div className="flex items-center justify-center gap-2 mb-4">
           <ChefHat className="w-10 h-10 text-primary" />
@@ -471,7 +453,7 @@ function HomePageContent() {
             </div>
           )}
 
-          {error && (
+          {displayError && (
             <div className={`p-4 rounded-lg flex items-start gap-3 ${rateLimited ? "bg-primary/10" : "bg-destructive/10"}`}>
               {rateLimited ? (
                 <LogIn className="w-5 h-5 text-primary shrink-0 mt-0.5" />
@@ -481,7 +463,7 @@ function HomePageContent() {
               <div>
                 {rateLimited ? (
                   <>
-                    <p className="text-sm font-medium mb-1">{error}</p>
+                    <p className="text-sm font-medium mb-1">{displayError}</p>
                     <Button
                       variant="default"
                       size="sm"
@@ -498,7 +480,7 @@ function HomePageContent() {
                   <>
                     <p className="text-sm font-medium text-destructive mb-1">
                       {(() => {
-                        const msg = error.toLowerCase();
+                        const msg = displayError.toLowerCase();
                         if (msg.includes("timeout") || msg.includes("시간") || msg.includes("timed out"))
                           return "요청 시간이 초과되었습니다";
                         if (msg.includes("network") || msg.includes("fetch") || msg.includes("failed to fetch") || msg.includes("연결"))
@@ -506,7 +488,7 @@ function HomePageContent() {
                         return "요청에 실패했습니다";
                       })()}
                     </p>
-                    <p className="text-xs text-destructive/80">{error}</p>
+                    <p className="text-xs text-destructive/80">{displayError}</p>
                     <Button
                       variant="outline"
                       size="sm"
