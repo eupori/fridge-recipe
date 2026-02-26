@@ -467,3 +467,96 @@ export async function getRatingStats(
   }
   return res.json();
 }
+
+// Reference Recipe types
+export type ReferenceRecipeListItem = {
+  id: number;
+  title: string;
+  category: string;
+  key_ingredients: string[];
+  time_min: number | null;
+  servings: number | null;
+  view_count: number;
+  source: string;
+};
+
+export type ReferenceRecipeDetail = {
+  id: number;
+  title: string;
+  category: string;
+  key_ingredients: string[];
+  all_ingredients: string[];
+  steps: string[];
+  technique: string | null;
+  time_min: number | null;
+  servings: number | null;
+  view_count: number;
+  rating: number | null;
+  source: string;
+  source_url: string;
+  crawled_at: string | null;
+};
+
+export type ReferenceRecipeListResponse = {
+  items: ReferenceRecipeListItem[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+};
+
+export type CategoryCount = {
+  category: string;
+  count: number;
+};
+
+export type SitemapEntry = {
+  id: number;
+  title: string;
+  category: string;
+  crawled_at: string | null;
+};
+
+// Reference Recipe API (서버 컴포넌트용 — no auth needed)
+export async function getReferenceRecipes(params?: {
+  category?: string;
+  page?: number;
+  per_page?: number;
+}): Promise<ReferenceRecipeListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.category) searchParams.set("category", params.category);
+  if (params?.page) searchParams.set("page", params.page.toString());
+  if (params?.per_page) searchParams.set("per_page", params.per_page.toString());
+  const qs = searchParams.toString();
+  const res = await fetch(`${API_BASE}/reference-recipes${qs ? `?${qs}` : ""}`, {
+    next: { revalidate: 86400 },
+  });
+  if (!res.ok) {
+    return { items: [], total: 0, page: 1, per_page: 20, total_pages: 1 };
+  }
+  return res.json();
+}
+
+export async function getReferenceRecipe(id: number): Promise<ReferenceRecipeDetail | null> {
+  const res = await fetch(`${API_BASE}/reference-recipes/${id}`, {
+    next: { revalidate: 86400 },
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function getReferenceRecipeCategories(): Promise<CategoryCount[]> {
+  const res = await fetch(`${API_BASE}/reference-recipes/categories`, {
+    next: { revalidate: 86400 },
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function getReferenceRecipeSitemap(): Promise<SitemapEntry[]> {
+  const res = await fetch(`${API_BASE}/reference-recipes/sitemap`, {
+    next: { revalidate: 86400 },
+  });
+  if (!res.ok) return [];
+  return res.json();
+}

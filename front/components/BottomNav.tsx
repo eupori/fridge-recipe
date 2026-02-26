@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Package, Heart, User, LogIn } from "lucide-react";
+import { Home, BookOpen, Package, Heart, User, LogIn } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
 export function BottomNav() {
@@ -11,6 +11,7 @@ export function BottomNav() {
 
   const tabs = [
     { href: "/", icon: Home, label: "홈" },
+    { href: "/recipes", icon: BookOpen, label: "레시피" },
     { href: "/pantry", icon: Package, label: "보유재료" },
     { href: "/favorites", icon: Heart, label: "즐겨찾기" },
     user
@@ -25,7 +26,7 @@ export function BottomNav() {
     >
       <div className="flex justify-around items-center h-14">
         {tabs.map((tab) => {
-          const isActive = pathname === tab.href;
+          const isActive = tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
           const Icon = tab.icon;
           return (
             <Link

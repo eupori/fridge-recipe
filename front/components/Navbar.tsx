@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
-import { ChefHat, Heart, LogOut, User, Package, History, Sun, Moon } from "lucide-react";
+import { ChefHat, Heart, LogOut, User, Package, History, Sun, Moon, BookOpen } from "lucide-react";
 
 function ThemeToggle() {
   const [dark, setDark] = useState(false);
@@ -49,6 +49,18 @@ export function Navbar() {
           {!isAuthPage && (
             <div className="flex items-center gap-1 sm:gap-2">
               <ThemeToggle />
+
+              {/* 레시피 링크 */}
+              <Button
+                variant={pathname.startsWith("/recipes") ? "secondary" : "ghost"}
+                size="sm"
+                asChild
+              >
+                <Link href="/recipes">
+                  <BookOpen className="w-4 h-4 sm:mr-1" />
+                  <span className="hidden sm:inline">레시피</span>
+                </Link>
+              </Button>
 
               {/* Pantry 링크 */}
               <Button

@@ -21,6 +21,9 @@ class ReferenceRecipe(Base):
     time_min = Column(Integer, nullable=True)
     servings = Column(Integer, nullable=True)
 
+    # 원본 백업 (리라이팅 전 steps)
+    original_steps = Column(JSON, nullable=True)
+
     # 메타
     source = Column(String(50), nullable=False, index=True)
     source_url = Column(String(500), nullable=False, unique=True)
