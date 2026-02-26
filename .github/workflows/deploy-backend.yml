@@ -27,7 +27,9 @@ jobs:
             PREV_COMMIT=$(git rev-parse HEAD)
             echo "Current commit: $PREV_COMMIT"
 
-            git pull origin master
+            # 로컬 변경 무시하고 최신 코드 강제 동기화
+            git fetch origin master
+            git reset --hard origin/master
             cd back
             DOCKER_BUILDKIT=1 docker compose build
             docker compose up -d
