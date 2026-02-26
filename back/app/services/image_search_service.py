@@ -452,20 +452,24 @@ class GeminiImageGenerationAdapter(ImageSearchAdapter):
         english_name = self._get_english_name(recipe_title)
 
         if has_reference:
-            prompt = f"""Create a realistic food photo of {recipe_title} ({english_name}).
+            prompt = f"""STRICT RULE: absolutely zero text, zero letters, zero words, zero characters, zero watermarks, zero logos anywhere in the image.
+
+Create a realistic food photo of {recipe_title} ({english_name}).
 The attached image shows a similar real dish for reference.
 Generate a new photorealistic image of this Korean dish with:
 natural lighting, top-down angle, ceramic plate,
 appetizing colors, restaurant-quality plating, shallow depth of field.
 Do NOT copy the reference exactly - create a fresh, realistic photo.
-IMPORTANT: Do NOT include any text, letters, words, watermarks, logos, or labels in the image. The image must contain only the food and tableware, absolutely no text overlay."""
+NO text. NO labels. NO titles. NO captions. NO writing. Only food and tableware."""
         else:
-            prompt = f"""Professional food photography of {recipe_title} ({english_name}).
+            prompt = f"""STRICT RULE: absolutely zero text, zero letters, zero words, zero characters, zero watermarks, zero logos anywhere in the image.
+
+Professional food photography of {recipe_title} ({english_name}).
 Korean cuisine, appetizing presentation, warm natural lighting,
 top-down view on a beautiful ceramic plate, restaurant quality,
 high resolution, photorealistic, shallow depth of field,
 garnished with fresh herbs, steam rising from the dish.
-IMPORTANT: Do NOT include any text, letters, words, watermarks, logos, or labels in the image. The image must contain only the food and tableware, absolutely no text overlay."""
+NO text. NO labels. NO titles. NO captions. NO writing. Only food and tableware."""
 
         return prompt
 
