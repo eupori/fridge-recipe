@@ -14,24 +14,9 @@ import { useAuth } from "@/lib/auth-context";
 import type { Recommendation, Recipe, ShoppingItem } from "@/types/recommendation";
 
 const PANTRY_STORAGE_KEY = "pantry-items";
-const PREFERRED_MALL_KEY = "preferred-mall";
-
-const SHOPPING_MALLS = {
-  coupang: {
-    label: "쿠팡",
-    toggleActive: "bg-[#E44232] text-white shadow-sm",
-    purchaseClass: "border-[#E44232]/30 text-[#E44232] hover:bg-[#E44232]/10",
-    buildUrl: (item: string) => `https://www.coupang.com/np/search?q=${encodeURIComponent(item)}`,
-  },
-  naver: {
-    label: "네이버쇼핑",
-    toggleActive: "bg-[#03C75A] text-white shadow-sm",
-    purchaseClass: "border-[#03C75A]/30 text-[#03C75A] hover:bg-[#03C75A]/10",
-    buildUrl: (item: string) => `https://search.shopping.naver.com/search/all?query=${encodeURIComponent(item)}`,
-  },
-} as const;
-
-type MallKey = keyof typeof SHOPPING_MALLS;
+const COUPANG_STYLE = {
+  purchaseClass: "border-[#E44232]/30 text-[#E44232] hover:bg-[#E44232]/10",
+};
 
 export default function ResultClient({ id }: { id: string }) {
   const [data, setData] = useState<Recommendation | null>(null);
@@ -43,29 +28,7 @@ export default function ResultClient({ id }: { id: string }) {
   const [recipeImages, setRecipeImages] = useState<(string | null)[]>([]);
   const [imageLoading, setImageLoading] = useState<boolean[]>([]);
   const [completedSteps, setCompletedSteps] = useState<Record<number, Set<number>>>({});
-  const [selectedMall, setSelectedMall] = useState<MallKey>("coupang");
   const { user } = useAuth();
-
-  // localStorage에서 선호 쇼핑몰 로드
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(PREFERRED_MALL_KEY);
-      if (stored && (stored === "coupang" || stored === "naver")) {
-        setSelectedMall(stored);
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  const handleMallChange = (mall: MallKey) => {
-    setSelectedMall(mall);
-    try {
-      localStorage.setItem(PREFERRED_MALL_KEY, mall);
-    } catch {
-      // ignore
-    }
-  };
 
   // 보유 재료 로드
   useEffect(() => {
@@ -681,26 +644,6 @@ export default function ResultClient({ id }: { id: string }) {
               <ShoppingCart className="w-5 h-5" />
               <h2 className="font-bold text-lg">장보기 리스트</h2>
             </div>
-            {/* 쇼핑몰 선택 - 브랜드 컬러 세그먼트 */}
-            <div className="inline-flex rounded-lg bg-muted p-0.5 gap-0.5">
-              {(Object.keys(SHOPPING_MALLS) as MallKey[]).map((key) => {
-                const mall = SHOPPING_MALLS[key];
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => handleMallChange(key)}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
-                      selectedMall === key
-                        ? mall.toggleActive
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {mall.label}
-                  </button>
-                );
-              })}
-            </div>
           </div>
 
           {(data.shopping_list || []).length > 0 ? (
@@ -708,11 +651,7 @@ export default function ResultClient({ id }: { id: string }) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                 {data.shopping_list.map((it: ShoppingItem, idx: number) => {
                   const inPantry = isInPantry(it.item);
-                  const mall = SHOPPING_MALLS[selectedMall];
-                  const purchaseUrl =
-                    selectedMall === "coupang" && it.purchase_url
-                      ? it.purchase_url
-                      : mall.buildUrl(it.item);
+                  const purchaseUrl = it.purchase_url || `https://www.coupang.com/np/search?q=${encodeURIComponent(it.item)}`;
                   return (
                     <div
                       key={idx}
@@ -741,7 +680,7 @@ export default function ResultClient({ id }: { id: string }) {
                           href={purchaseUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border whitespace-nowrap transition-colors ${mall.purchaseClass}`}
+                          className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border whitespace-nowrap transition-colors ${COUPANG_STYLE.purchaseClass}`}
                         >
                           구매
                           <ExternalLink className="w-3 h-3" />
@@ -751,7 +690,7 @@ export default function ResultClient({ id }: { id: string }) {
                   );
                 })}
               </div>
-              {selectedMall === "coupang" && data.shopping_list.some((it: ShoppingItem) => it.purchase_url) && (
+              {data.shopping_list.some((it: ShoppingItem) => it.purchase_url) && (
                 <p className="text-xs text-muted-foreground mt-3">
                   이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다
                 </p>
