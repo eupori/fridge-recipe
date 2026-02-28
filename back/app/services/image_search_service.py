@@ -116,6 +116,29 @@ KOREAN_FOOD_TRANSLATIONS: dict[str, str] = {
 }
 
 
+# 퍼지 캐시 매칭용 요리 키워드 (긴 키워드 우선, greedy 매칭)
+_DISH_KEYWORDS: list[str] = sorted(
+    list(KOREAN_FOOD_TRANSLATIONS.keys()) + [
+        # KOREAN_FOOD_TRANSLATIONS에 없는 추가 카테고리/요리
+        "볶음", "구이", "조림", "무침", "튀김", "부침개",
+        "카레", "리조또", "스테이크", "오므라이스", "돈까스",
+        "치킨", "피자", "샌드위치", "토스트", "수프",
+    ],
+    key=len,
+    reverse=True,
+)
+# 중복 제거 (순서 유지)
+_DISH_KEYWORDS = list(dict.fromkeys(_DISH_KEYWORDS))
+
+
+def _extract_dish_keyword(title: str) -> str | None:
+    """레시피 제목에서 가장 구체적인 요리 키워드 추출 (longest match)"""
+    for kw in _DISH_KEYWORDS:
+        if kw in title:
+            return kw
+    return None
+
+
 class ImageSearchAdapter(ABC):
     """이미지 검색 어댑터 인터페이스"""
 
@@ -965,15 +988,43 @@ class ImageSearchService:
         """캐시 키 생성"""
         return recipe_title
 
+    def _fuzzy_cache_lookup(self, recipe_title: str) -> str | None:
+        """
+        키워드 기반 퍼지 캐시 매칭
+
+        "대패삼겹 마늘양파 간장덮밥" → 키워드 "덮밥" 추출 →
+        캐시에서 "덮밥"이 포함된 항목 찾아 이미지 재사용
+
+        Returns:
+            캐시된 이미지 URL 또는 None
+        """
+        target_kw = _extract_dish_keyword(recipe_title)
+        if not target_kw:
+            return None
+
+        for cached_title, entry in self.cache.items():
+            if target_kw in cached_title:
+                url = entry.get("url") if isinstance(entry, dict) else entry
+                if url:
+                    entry["last_used"] = time.time()
+                    logger.info(
+                        f"퍼지 캐시 히트: '{recipe_title}' → '{cached_title}' "
+                        f"(키워드: {target_kw})"
+                    )
+                    return url
+
+        return None
+
     async def get_image(self, recipe_title: str) -> str | None:
         """
-        레시피 이미지 검색 (캐싱 + 폴백)
+        레시피 이미지 검색 (캐싱 + 퍼지 매칭 + 폴백)
 
         순서:
-        1. 캐시 확인
-        2. Primary provider 시도
-        3. Fallback provider 시도 (Primary 실패 시)
-        4. None 반환 (모두 실패)
+        1. 정확한 캐시 확인
+        2. 퍼지 캐시 매칭 (키워드 기반)
+        3. Primary provider 시도
+        4. Fallback provider 시도 (Primary 실패 시)
+        5. None 반환 (모두 실패)
 
         Args:
             recipe_title: 레시피 제목
@@ -983,15 +1034,21 @@ class ImageSearchService:
         """
         cache_key = self._cache_key(recipe_title)
 
-        # 1. 캐시 확인
+        # 1. 정확한 캐시 확인
         if self.cache_enabled and cache_key in self.cache:
             entry = self.cache[cache_key]
             cached_url = entry.get("url") if isinstance(entry, dict) else entry
             entry["last_used"] = time.time()
-            logger.info(f"캐시 히트: '{cache_key}'")
+            logger.info(f"캐시 히트 (정확): '{cache_key}'")
             return cached_url
 
-        # 2. Primary provider 시도
+        # 2. 퍼지 캐시 매칭 (키워드 기반 유사 이미지 재사용)
+        if self.cache_enabled:
+            fuzzy_url = self._fuzzy_cache_lookup(recipe_title)
+            if fuzzy_url:
+                return fuzzy_url
+
+        # 3. Primary provider 시도
         try:
             image_url = await self.primary.search_image(recipe_title)
             if image_url:
