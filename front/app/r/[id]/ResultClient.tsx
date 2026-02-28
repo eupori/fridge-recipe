@@ -15,7 +15,7 @@ import type { Recommendation, Recipe, ShoppingItem } from "@/types/recommendatio
 
 const PANTRY_STORAGE_KEY = "pantry-items";
 const COUPANG_STYLE = {
-  purchaseClass: "border-[#E44232]/30 text-[#E44232] hover:bg-[#E44232]/10",
+  purchaseClass: "bg-[#E44232] text-white hover:bg-[#E44232]/90 border-transparent",
 };
 
 export default function ResultClient({ id }: { id: string }) {
@@ -682,9 +682,9 @@ export default function ResultClient({ id }: { id: string }) {
                           href={purchaseUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border whitespace-nowrap transition-colors ${COUPANG_STYLE.purchaseClass}`}
+                          className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border whitespace-nowrap transition-colors font-medium ${COUPANG_STYLE.purchaseClass}`}
                         >
-                          구매
+                          쿠팡
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       </div>

@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY app ./app
+COPY scripts ./scripts
 
 # Create data directories for image cache (writable by appuser)
 RUN mkdir -p /app/data/images
