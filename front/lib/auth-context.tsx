@@ -26,9 +26,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const userData = await getMe();
       setUser(userData);
-    } catch {
+    } catch (err) {
       setUser(null);
-      apiLogout();
+      // 401(토큰 만료/무효)만 로그아웃, 네트워크 에러 등은 유지
+      if (err instanceof Error && err.message === "UNAUTHORIZED") {
+        apiLogout();
+      }
     } finally {
       setLoading(false);
     }

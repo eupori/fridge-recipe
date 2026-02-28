@@ -89,7 +89,7 @@ export async function getMe(): Promise<UserResponse> {
     headers: { ...getAuthHeaders() },
   });
   if (!res.ok) {
-    throw new Error("인증이 필요합니다.");
+    throw new Error(res.status === 401 ? "UNAUTHORIZED" : `HTTP ${res.status}`);
   }
   return res.json();
 }

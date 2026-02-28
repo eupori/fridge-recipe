@@ -19,6 +19,27 @@ interface RecipeJobContextType extends RecipeJobState {
 const RecipeJobContext = createContext<RecipeJobContextType | null>(null);
 
 const TIMEOUT_MS = 180_000; // 3분
+const JOB_STORAGE_KEY = "active-job-id";
+
+function saveJobId(jobId: string) {
+  try {
+    localStorage.setItem(JOB_STORAGE_KEY, jobId);
+    sessionStorage.setItem(JOB_STORAGE_KEY, jobId);
+  } catch { /* storage unavailable */ }
+}
+
+function loadJobId(): string | null {
+  try {
+    return sessionStorage.getItem(JOB_STORAGE_KEY) || localStorage.getItem(JOB_STORAGE_KEY);
+  } catch { return null; }
+}
+
+function clearJobId() {
+  try {
+    sessionStorage.removeItem(JOB_STORAGE_KEY);
+    localStorage.removeItem(JOB_STORAGE_KEY);
+  } catch { /* storage unavailable */ }
+}
 
 export function RecipeJobProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -30,6 +51,7 @@ export function RecipeJobProvider({ children }: { children: ReactNode }) {
   });
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
+  const pollErrorCount = useRef(0);
 
   const stopPolling = useCallback(() => {
     if (intervalRef.current) {
@@ -41,12 +63,13 @@ export function RecipeJobProvider({ children }: { children: ReactNode }) {
   const poll = useCallback(
     (jobId: string) => {
       startTimeRef.current = Date.now();
+      pollErrorCount.current = 0;
 
       intervalRef.current = setInterval(async () => {
         // 타임아웃 체크
         if (Date.now() - startTimeRef.current > TIMEOUT_MS) {
           stopPolling();
-          sessionStorage.removeItem("active-job-id");
+          clearJobId();
           setState((prev) => ({
             ...prev,
             isProcessing: false,
@@ -57,11 +80,12 @@ export function RecipeJobProvider({ children }: { children: ReactNode }) {
 
         try {
           const status = await getJobStatus(jobId);
+          pollErrorCount.current = 0;
           setState((prev) => ({ ...prev, progress: status.progress }));
 
           if (status.status === "completed" && status.recommendation_id) {
             stopPolling();
-            sessionStorage.removeItem("active-job-id");
+            clearJobId();
             setState({ isProcessing: false, jobId: null, progress: 0, error: null });
             window.dispatchEvent(
               new CustomEvent("recipe-ready", { detail: { id: status.recommendation_id } })
@@ -69,7 +93,7 @@ export function RecipeJobProvider({ children }: { children: ReactNode }) {
             router.push(`/r/${status.recommendation_id}`);
           } else if (status.status === "failed") {
             stopPolling();
-            sessionStorage.removeItem("active-job-id");
+            clearJobId();
             setState((prev) => ({
               ...prev,
               isProcessing: false,
@@ -77,13 +101,17 @@ export function RecipeJobProvider({ children }: { children: ReactNode }) {
             }));
           }
         } catch {
-          stopPolling();
-          sessionStorage.removeItem("active-job-id");
-          setState((prev) => ({
-            ...prev,
-            isProcessing: false,
-            error: "작업 상태를 확인할 수 없습니다.",
-          }));
+          // 일시적 네트워크 오류는 3회까지 재시도
+          pollErrorCount.current++;
+          if (pollErrorCount.current >= 3) {
+            stopPolling();
+            clearJobId();
+            setState((prev) => ({
+              ...prev,
+              isProcessing: false,
+              error: "작업 상태를 확인할 수 없습니다.",
+            }));
+          }
         }
       }, 2000);
     },
@@ -93,7 +121,7 @@ export function RecipeJobProvider({ children }: { children: ReactNode }) {
   const startJob = useCallback(
     (jobId: string) => {
       stopPolling();
-      sessionStorage.setItem("active-job-id", jobId);
+      saveJobId(jobId);
       setState({ isProcessing: true, jobId, progress: 0, error: null });
       poll(jobId);
     },
@@ -102,13 +130,13 @@ export function RecipeJobProvider({ children }: { children: ReactNode }) {
 
   const clearJob = useCallback(() => {
     stopPolling();
-    sessionStorage.removeItem("active-job-id");
+    clearJobId();
     setState({ isProcessing: false, jobId: null, progress: 0, error: null });
   }, [stopPolling]);
 
-  // 마운트 시 sessionStorage에서 진행 중인 작업 복원
+  // 마운트 시 저장된 작업 복원
   useEffect(() => {
-    const savedJobId = sessionStorage.getItem("active-job-id");
+    const savedJobId = loadJobId();
     if (savedJobId) {
       setState({ isProcessing: true, jobId: savedJobId, progress: 0, error: null });
       poll(savedJobId);
