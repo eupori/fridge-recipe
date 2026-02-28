@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 
 declare global {
   interface Window {
@@ -15,27 +16,32 @@ interface AdUnitProps {
 }
 
 export default function AdUnit({ slot, format = "auto", className }: AdUnitProps) {
+  const pathname = usePathname();
   const containerRef = useRef<HTMLDivElement>(null);
-  const pushed = useRef(false);
 
   useEffect(() => {
-    if (pushed.current) return;
+    let attempts = 0;
+    const maxAttempts = 5;
 
-    const timer = setTimeout(() => {
+    const tryPush = () => {
       try {
         (window.adsbygoogle = window.adsbygoogle || []).push({});
-        pushed.current = true;
       } catch {
-        // adsbygoogle not loaded yet
+        if (attempts < maxAttempts) {
+          attempts++;
+          setTimeout(tryPush, 500 * attempts);
+        }
       }
-    }, 100);
+    };
 
+    const timer = setTimeout(tryPush, 200);
     return () => clearTimeout(timer);
-  }, []);
+  }, [pathname]);
 
   return (
     <div className={`overflow-hidden ${className ?? ""}`} ref={containerRef}>
       <ins
+        key={`${slot}-${pathname}`}
         className="adsbygoogle"
         style={{ display: "block", minHeight: "50px", maxWidth: "100%" }}
         data-ad-client="ca-pub-4539589433798899"
