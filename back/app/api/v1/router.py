@@ -7,6 +7,7 @@ from app.api.v1.endpoints.recommendations import router as recommendations_route
 from app.api.v1.endpoints.search_histories import router as search_histories_router
 from app.api.v1.endpoints.ratings import router as ratings_router
 from app.api.v1.endpoints.reference_recipes import router as reference_recipes_router
+from app.api.v1.endpoints.meal_plans import router as meal_plans_router
 from app.api.v1.endpoints.stats import router as stats_router
 
 api_router = APIRouter()
@@ -24,3 +25,4 @@ api_router.include_router(
     reference_recipes_router, prefix="/reference-recipes", tags=["reference-recipes"]
 )
 api_router.include_router(stats_router, prefix="/stats", tags=["stats"])
+api_router.include_router(meal_plans_router, prefix="/meal-plans", tags=["meal-plans"])

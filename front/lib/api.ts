@@ -1,3 +1,5 @@
+import type { ShoppingItem } from "@/types/recommendation";
+
 type Constraints = {
   time_limit_min: number;
   servings: number;
@@ -556,6 +558,132 @@ export async function getReferenceRecipeCategories(): Promise<CategoryCount[]> {
 export async function getReferenceRecipeSitemap(): Promise<SitemapEntry[]> {
   const res = await fetch(`${API_BASE}/reference-recipes/sitemap`, {
     next: { revalidate: 86400 },
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+// Meal Plan types
+export type MealSlotResponse = {
+  id: string;
+  day_of_week: number;
+  meal_type: string;
+  recommendation_id: string;
+  recipe_index: number;
+  recipe_title: string;
+  recipe_image_url: string | null;
+};
+
+export type MealPlanResponse = {
+  id: string;
+  title: string;
+  week_start: string;
+  slots: MealSlotResponse[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type MealPlanListItem = {
+  id: string;
+  title: string;
+  week_start: string;
+  slot_count: number;
+  created_at: string;
+};
+
+// Meal Plan API
+export async function createMealPlan(
+  title: string,
+  weekStart: string
+): Promise<MealPlanResponse> {
+  const res = await fetch(`${API_BASE}/meal-plans`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify({ title, week_start: weekStart }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getMealPlans(): Promise<MealPlanListItem[]> {
+  const res = await fetch(`${API_BASE}/meal-plans`, {
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function getMealPlan(
+  id: string
+): Promise<MealPlanResponse | null> {
+  const res = await fetch(`${API_BASE}/meal-plans/${id}`, {
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function deleteMealPlan(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/meal-plans/${id}`, {
+    method: "DELETE",
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `HTTP ${res.status}`);
+  }
+}
+
+export async function addMealSlot(
+  planId: string,
+  dayOfWeek: number,
+  mealType: string,
+  recommendationId: string,
+  recipeIndex: number,
+  recipeTitle: string,
+  recipeImageUrl: string | null
+): Promise<MealSlotResponse> {
+  const res = await fetch(`${API_BASE}/meal-plans/${planId}/slots`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify({
+      day_of_week: dayOfWeek,
+      meal_type: mealType,
+      recommendation_id: recommendationId,
+      recipe_index: recipeIndex,
+      recipe_title: recipeTitle,
+      recipe_image_url: recipeImageUrl,
+    }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function removeMealSlot(
+  planId: string,
+  slotId: string
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/meal-plans/${planId}/slots/${slotId}`, {
+    method: "DELETE",
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `HTTP ${res.status}`);
+  }
+}
+
+export async function getMealPlanShoppingList(
+  planId: string
+): Promise<ShoppingItem[]> {
+  const res = await fetch(`${API_BASE}/meal-plans/${planId}/shopping-list`, {
+    headers: { ...getAuthHeaders() },
   });
   if (!res.ok) return [];
   return res.json();

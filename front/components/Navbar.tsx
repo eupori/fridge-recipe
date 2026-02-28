@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
-import { ChefHat, Heart, LogOut, User, Package, History, Sun, Moon, BookOpen } from "lucide-react";
+import { ChefHat, Heart, LogOut, User, Package, History, Sun, Moon, BookOpen, Calendar } from "lucide-react";
 
 function ThemeToggle() {
   const [dark, setDark] = useState(false);
@@ -78,6 +78,18 @@ export function Navbar() {
                 <div className="w-16 h-8" />
               ) : user ? (
                 <>
+                  {/* 식단 플래너 */}
+                  <Button
+                    variant={pathname === "/meal-planner" ? "secondary" : "ghost"}
+                    size="sm"
+                    asChild
+                  >
+                    <Link href="/meal-planner">
+                      <Calendar className="w-4 h-4 sm:mr-1" />
+                      <span className="hidden sm:inline">식단</span>
+                    </Link>
+                  </Button>
+
                   {/* 최근 검색 */}
                   <Button
                     variant={pathname === "/history" ? "secondary" : "ghost"}
