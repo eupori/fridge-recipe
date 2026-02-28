@@ -23,9 +23,11 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    email = Column(String(255), unique=True, nullable=False, index=True)
-    password_hash = Column(String(255), nullable=False)
+    email = Column(String(255), unique=True, nullable=True, index=True)
+    password_hash = Column(String(255), nullable=True)
     nickname = Column(String(50), nullable=True)
+    provider = Column(String(20), nullable=True)
+    provider_id = Column(String(100), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -48,8 +50,9 @@ class UserResponse(BaseModel):
     """사용자 응답 스키마 (비밀번호 제외)"""
 
     id: str
-    email: str
+    email: str | None = None
     nickname: str | None = None
+    provider: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

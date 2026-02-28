@@ -15,8 +15,9 @@ export type RecommendationCreate = {
 // Auth types
 export type UserResponse = {
   id: string;
-  email: string;
+  email: string | null;
   nickname: string | null;
+  provider: string | null;
   created_at: string;
 };
 
@@ -76,6 +77,21 @@ export async function login(email: string, password: string): Promise<TokenRespo
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  setToken(data.access_token);
+  return data;
+}
+
+export async function kakaoLogin(code: string, redirectUri: string): Promise<TokenResponse> {
+  const res = await fetch(`${API_BASE}/auth/kakao`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, redirect_uri: redirectUri }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));

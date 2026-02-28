@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     haiku_max_tokens: int = 3000
     haiku_temperature: float = 0.3
 
+    # Kakao OAuth
+    kakao_rest_api_key: str | None = None
+    kakao_client_secret: str | None = None
+
     # Coupang
     coupang_partners_tracking_id: str | None = None
     coupang_partners_sub_id: str | None = None
