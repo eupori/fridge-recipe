@@ -39,19 +39,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js"
           crossOrigin="anonymous"
         />
-        {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
-          <>
-            <script
-              async
-              src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}`}
-            />
-            <script
-              dangerouslySetInnerHTML={{
-                __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}')`,
-              }}
-            />
-          </>
-        )}
+        <script
+          async
+          src="https://www.googletagmanager.com/gtag/js?id=G-K9DSYJ36D7"
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','G-K9DSYJ36D7')`,
+          }}
+        />
       </head>
       <body className="font-noto antialiased pb-14 sm:pb-0">
         <AuthProvider>
