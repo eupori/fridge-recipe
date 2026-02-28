@@ -37,8 +37,8 @@ engine_kwargs = {
 # PostgreSQL 연결 풀링 최적화 (Supabase Session Pooler 사용 시)
 if not SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
     engine_kwargs.update({
-        "pool_size": 5,
-        "max_overflow": 10,
+        "pool_size": 3,
+        "max_overflow": 3,
         "pool_recycle": 300,  # 5분마다 연결 갱신
     })
 

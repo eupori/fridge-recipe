@@ -241,9 +241,21 @@ async def _background_generate(
     client_ip: str,
 ) -> None:
     """백그라운드에서 레시피 생성 (Job 상태 업데이트)"""
-    update_job(job_id, status="processing", progress=10)
+    update_job(job_id, status="processing", progress=5)
     db = SessionLocal()
     try:
+        # LLM 기반 식재료 검증 (블록리스트 통과 후 추가 검증)
+        non_food = await check_ingredients_with_llm(payload.ingredients)
+        if non_food:
+            non_food_str = ", ".join(non_food)
+            update_job(
+                job_id,
+                status="failed",
+                error=f"식재료가 아닌 항목이 포함되어 있습니다: {non_food_str}. 먹을 수 있는 재료만 입력해주세요.",
+            )
+            return
+        update_job(job_id, progress=10)
+
         response = await create_recommendation(payload, db, skip_images=True)
         update_job(job_id, progress=80)
 
@@ -293,10 +305,10 @@ async def post_recommendations_async(
     current_user: User | None = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
 ):
-    # 재료 정제 (프롬프트 인젝션 방지)
+    # 재료 정제 (프롬프트 인젝션 방지) — 블록리스트만 (즉시 반환)
     payload.ingredients = sanitize_ingredients(payload.ingredients)
 
-    # 재료 검증
+    # 재료 검증 (블록리스트 — 즉시, LLM 검증은 Job 내부에서)
     blocked = validate_ingredients(payload.ingredients)
     if blocked:
         blocked_str = ", ".join(blocked)
@@ -307,15 +319,6 @@ async def post_recommendations_async(
 
     if not payload.ingredients:
         raise HTTPException(status_code=400, detail="유효한 재료를 입력해주세요.")
-
-    # LLM 기반 식재료 검증 (Haiku)
-    non_food = await check_ingredients_with_llm(payload.ingredients)
-    if non_food:
-        non_food_str = ", ".join(non_food)
-        raise HTTPException(
-            status_code=400,
-            detail=f"식재료가 아닌 항목이 포함되어 있습니다: {non_food_str}. 먹을 수 있는 재료만 입력해주세요.",
-        )
 
     # 사용량 체크
     usage_service = UsageService(db)

@@ -9,8 +9,8 @@ services:
       - ./data:/app/data
       - claude-auth:/home/appuser/.claude
     restart: always
-    mem_limit: 512m
-    memswap_limit: 768m
+    mem_limit: 2g
+    memswap_limit: 3g
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
