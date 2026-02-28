@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { AuthProvider } from "@/lib/auth-context";
+import { AuthProvider } from "@/lib/auth-context"; // GA4: G-K9DSYJ36D7
 import { RecipeJobProvider } from "@/lib/recipe-job-context";
 import { Navbar } from "@/components/Navbar";
 import { BottomNav } from "@/components/BottomNav";
