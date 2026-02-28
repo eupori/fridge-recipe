@@ -284,16 +284,28 @@ RecommendationCreate:
 - [x] ✅ 재료 입력 검증 (비식품/위험 재료 블록리스트 + LLM 프롬프트 방어)
 - [x] ✅ React.memo 최적화 (FavoriteButton, ShareButton)
 
+- [x] ✅ Google Analytics 연동 (GA4 `G-K9DSYJ36D7`, `layout.tsx` 하드코딩)
+- [x] ✅ AdSense 수동 광고 단위 (홈/결과/즐겨찾기/히스토리 4슬롯, SPA 라우트 재로드)
+- [x] ✅ 레시피 평가 (1-5 별점, upsert, `rating.py` + `rating_service.py` + `ratings.py`)
+- [x] ✅ 쿠팡 파트너스 (트래킹 ID `AF3132558`, 장보기 리스트 구매 버튼)
+- [x] ✅ 쿠팡 구매 버튼 시인성 개선 (배경 채움 + "쿠팡" 라벨)
+- [x] ✅ 사이트맵 (`front/app/sitemap.ts`, 레퍼런스 레시피 동적 포함 + 24시간 캐시)
+- [x] ✅ robots.txt (`front/app/robots.ts`, `/api/`, `/login`, `/signup` 제외)
+- [x] ✅ 냉장고 보유재료 관리 (`front/app/pantry/`, localStorage 기반, 추천 재료 18개)
+- [x] ✅ Google Search Console 등록 (사이트맵 1,901페이지 인식, 2026-02-28)
+
+- [x] ✅ 쿠팡 전환율 GA 이벤트 (`coupang_click` 이벤트, `ResultClient.tsx`)
+- [x] ✅ 테스트 인프라 확장 (116개 테스트, conftest.py, CI pytest job)
+
 ### 계획된 기능
 
-- [ ] 테스트 인프라 (현재 기본 테스트만 존재)
-- [ ] 레시피 평가
-- [ ] Google Analytics 연동
-- [ ] AdSense 수동 광고 단위 (트래픽 확보 후)
+- [ ] 레퍼런스 레시피 프로덕션 배포 (1,899개, 조리 단계 리라이팅 완료 대기)
+- [ ] 프리미엄 기능 게이팅 (영양정보/대체재료/보관팁 잠금, User.plan 필드)
+- [ ] 주간 식단 플래너 MVP
 
 ### 배포 구성
 
-- **프론트엔드:** Vercel (`eupori.dev`, `recipe.eupori.dev`)
+- **프론트엔드:** Vercel (`recipe.eupori.dev`)
 - **백엔드:** EC2 (t3.small) + Docker Compose (`recipe-api.eupori.dev`)
 - **데이터베이스:** PostgreSQL (Supabase)
 - **DNS:** Cloudflare (DNS only 모드)

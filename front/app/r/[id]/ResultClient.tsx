@@ -1,5 +1,11 @@
 "use client";
 
+declare global {
+  interface Window {
+    gtag?: (...args: unknown[]) => void;
+  }
+}
+
 import { useEffect, useState } from "react";
 import { getRecommendation, addFavorite, getRecipeLikeStats, getRecipeImages, resolveImageUrl, RecommendationLikeStats, rateRecipe, getRatingStats, RecommendationRatingStats } from "../../../lib/api";
 import { Button } from "@/components/ui/button";
@@ -30,6 +36,16 @@ export default function ResultClient({ id }: { id: string }) {
   const [completedSteps, setCompletedSteps] = useState<Record<number, Set<number>>>({});
   const [failedImages, setFailedImages] = useState<Set<number>>(new Set());
   const { user } = useAuth();
+
+  const trackCoupangClick = (ingredientName: string) => {
+    if (typeof window !== "undefined" && window.gtag) {
+      window.gtag("event", "coupang_click", {
+        event_category: "monetization",
+        ingredient: ingredientName,
+        recommendation_id: id,
+      });
+    }
+  };
 
   // 보유 재료 로드
   useEffect(() => {
@@ -682,6 +698,7 @@ export default function ResultClient({ id }: { id: string }) {
                           href={purchaseUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={() => trackCoupangClick(it.item)}
                           className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border whitespace-nowrap transition-colors font-medium ${COUPANG_STYLE.purchaseClass}`}
                         >
                           쿠팡

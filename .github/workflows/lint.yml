@@ -51,3 +51,29 @@ jobs:
 
       - name: Run ESLint
         run: npm run lint
+
+  test-backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: back
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest -v --tb=short
+        env:
+          APP_ENV: test
+          LLM_PROVIDER: mock
+          IMAGE_SEARCH_PROVIDER: mock
+          JWT_SECRET_KEY: test-secret-key-for-ci
