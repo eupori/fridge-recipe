@@ -309,6 +309,10 @@ class GoogleImageSearchAdapter(ImageSearchAdapter):
                 and "pstatic.net" not in u
                 and "daumcdn.net" not in u
                 and "tistorycdn.com" not in u
+                and "fbsbx.com" not in u
+                and "fbcdn.net" not in u
+                and "instagram.com" not in u
+                and "cdninstagram.com" not in u
             ]
 
             if urls:
@@ -563,6 +567,10 @@ NO text. NO labels. NO titles. NO captions. NO writing. Only food and tableware.
                 and "pstatic.net" not in u      # 네이버 블로그 핫링크 차단
                 and "daumcdn.net" not in u      # 다음/카카오 핫링크 차단
                 and "tistorycdn.com" not in u   # 티스토리 핫링크 차단
+                and "fbsbx.com" not in u        # Facebook CDN 핫링크 차단
+                and "fbcdn.net" not in u        # Facebook CDN
+                and "instagram.com" not in u    # Instagram 핫링크 차단
+                and "cdninstagram.com" not in u # Instagram CDN
             ]
 
             if urls:

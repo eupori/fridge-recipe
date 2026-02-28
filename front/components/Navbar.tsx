@@ -29,7 +29,7 @@ function ThemeToggle() {
 }
 
 export function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, loading, logout } = useAuth();
   const pathname = usePathname();
 
   // 로그인/회원가입 페이지에서는 간소화된 Navbar
@@ -74,7 +74,9 @@ export function Navbar() {
                 </Link>
               </Button>
 
-              {user ? (
+              {loading ? (
+                <div className="w-16 h-8" />
+              ) : user ? (
                 <>
                   {/* 최근 검색 */}
                   <Button

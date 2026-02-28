@@ -28,6 +28,7 @@ export default function ResultClient({ id }: { id: string }) {
   const [recipeImages, setRecipeImages] = useState<(string | null)[]>([]);
   const [imageLoading, setImageLoading] = useState<boolean[]>([]);
   const [completedSteps, setCompletedSteps] = useState<Record<number, Set<number>>>({});
+  const [failedImages, setFailedImages] = useState<Set<number>>(new Set());
   const { user } = useAuth();
 
   // 보유 재료 로드
@@ -270,7 +271,7 @@ export default function ResultClient({ id }: { id: string }) {
                   const imageUrl = recipeImages[idx];
                   const isLoading = imageLoading[idx];
 
-                  if (imageUrl) {
+                  if (imageUrl && !failedImages.has(idx)) {
                     return (
                       <div className="w-32 h-32 md:w-40 md:h-40 shrink-0 bg-muted">
                         <img
@@ -281,6 +282,7 @@ export default function ResultClient({ id }: { id: string }) {
                           decoding="async"
                           width={160}
                           height={160}
+                          onError={() => setFailedImages(prev => new Set(prev).add(idx))}
                         />
                       </div>
                     );
