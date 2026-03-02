@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     claude_subprocess_timeout: int = 120
 
     # Concurrency & Cache
-    max_concurrent_llm: int = 5  # 동시 LLM subprocess 최대 수
+    max_concurrent_llm: int = 3  # 동시 LLM subprocess 최대 수 (워커별)
     cache_expiry_days: int = 14  # 캐시 만료일
 
     # Gemini (이미지 생성용) - 유료 계정 필요
