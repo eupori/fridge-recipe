@@ -227,7 +227,7 @@ async def run_scenario(
             return result
 
         # 3. Job 폴링
-        job_result = await poll_job(client, job_id, timeout=180)
+        job_result = await poll_job(client, job_id, timeout=300)
         if job_result.get("status") == "completed":
             rec_id = job_result["recommendation_id"]
             rec = await fetch_recommendation(client, rec_id)
