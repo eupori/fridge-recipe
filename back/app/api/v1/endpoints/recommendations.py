@@ -256,8 +256,8 @@ async def _background_generate(
             return
         update_job(job_id, progress=10)
 
-        response = await create_recommendation(payload, db, skip_images=True)
-        update_job(job_id, progress=80)
+        response = await create_recommendation(payload, db)
+        update_job(job_id, progress=90)
 
         # 사용량 증가
         usage_service = UsageService(db)
