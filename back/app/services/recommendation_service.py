@@ -309,7 +309,7 @@ async def create_recommendation(
         image_results = [None] * len(recipes_raw)
     else:
         image_service = ImageSearchService()
-        image_timeout = max(28 - llm_elapsed, 5)
+        image_timeout = max(30 - llm_elapsed, 15)
         logger.info(f"이미지 검색 시작: {len(recipes_raw)}개 레시피 (타임아웃: {image_timeout:.1f}초)")
         image_tasks = [image_service.get_image(recipe.title) for recipe in recipes_raw]
         wrapped_img = [
