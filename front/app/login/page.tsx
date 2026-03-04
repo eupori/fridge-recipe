@@ -51,7 +51,7 @@ function LoginForm() {
     <Card>
       <CardHeader className="text-center">
         <h1 className="text-2xl font-bold">로그인</h1>
-        <p className="text-muted-foreground">오머먹에 로그인하세요</p>
+        <p className="text-muted-foreground">냉탐정에 로그인하세요</p>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">

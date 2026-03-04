@@ -8,7 +8,7 @@ import { Pagination } from "@/components/Pagination";
 export const revalidate = 86400;
 
 export const metadata: Metadata = {
-  title: "한국 레시피 모음 | 오머먹",
+  title: "한국 레시피 모음 | 냉탐정",
   description: "1,800개 이상의 한국 가정식 레시피를 찾아보세요. 밥, 국물, 반찬, 면/분식 등 카테고리별로 쉽고 빠른 요리법을 확인하세요.",
   alternates: { canonical: "https://recipe.eupori.dev/recipes" },
 };

@@ -64,7 +64,7 @@ export const ShareButton = memo(function ShareButton({ title, text, url, imageUr
       objectType: "feed",
       content: {
         title,
-        description: text || "오머먹 - 냉장고 파먹기 레시피",
+        description: text || "냉탐정 - 냉장고 파먹기 레시피",
         imageUrl: imageUrl || "https://recipe.eupori.dev/og-image.png",
         link: { mobileWebUrl: shareUrl, webUrl: shareUrl },
       },

@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "오머먹 - 냉장고 재료로 레시피 추천";
+export const alt = "냉탐정 - 냉장고 재료로 AI 레시피 추천";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -32,7 +32,7 @@ export default async function Image() {
             display: "flex",
           }}
         >
-          오머먹
+          냉탐정
         </div>
         <div
           style={{

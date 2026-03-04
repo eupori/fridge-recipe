@@ -11,16 +11,16 @@ export const revalidate = 86400;
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const id = parseInt(params.id, 10);
-  if (isNaN(id)) return { title: "레시피를 찾을 수 없습니다 | 오머먹" };
+  if (isNaN(id)) return { title: "레시피를 찾을 수 없습니다 | 냉탐정" };
 
   const recipe = await getReferenceRecipe(id);
-  if (!recipe) return { title: "레시피를 찾을 수 없습니다 | 오머먹" };
+  if (!recipe) return { title: "레시피를 찾을 수 없습니다 | 냉탐정" };
 
   const description = `${recipe.title} 만드는 법 - ${recipe.key_ingredients.join(", ")}으로 만드는 ${recipe.category} 레시피. ${recipe.time_min ? `조리시간 ${recipe.time_min}분.` : ""}`;
   const url = `https://recipe.eupori.dev/recipes/${recipe.id}`;
 
   return {
-    title: `${recipe.title} 만드는 법 | 오머먹`,
+    title: `${recipe.title} 만드는 법 | 냉탐정`,
     description,
     alternates: { canonical: url },
     openGraph: {
@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     },
     twitter: {
       card: "summary",
-      title: `${recipe.title} 만드는 법 | 오머먹`,
+      title: `${recipe.title} 만드는 법 | 냉탐정`,
       description,
     },
   };
@@ -64,7 +64,7 @@ export default async function RecipeDetailPage({ params }: { params: { id: strin
       position: i + 1,
       text: step,
     })),
-    author: { "@type": "Organization", name: "오머먹" },
+    author: { "@type": "Organization", name: "냉탐정" },
     ...(recipe.source_url ? { isBasedOn: recipe.source_url } : {}),
     ...(recipe.rating ? { aggregateRating: { "@type": "AggregateRating", ratingValue: recipe.rating, bestRating: 5 } } : {}),
   };

@@ -33,7 +33,7 @@ function HomePageLoading() {
       <div className="text-center mb-8">
         <div className="flex items-center justify-center gap-2 mb-4">
           <ChefHat className="w-10 h-10 text-primary" />
-          <h1 className="text-4xl font-bold">오머먹</h1>
+          <h1 className="text-4xl font-bold">냉탐정</h1>
         </div>
         <p className="text-2xl font-semibold text-primary mb-2">
           냉장고 열면, 답 나온다
@@ -292,7 +292,7 @@ function HomePageContent() {
       <div className="text-center mb-8">
         <div className="flex items-center justify-center gap-2 mb-4">
           <ChefHat className="w-10 h-10 text-primary" />
-          <h1 className="text-4xl font-bold">오머먹</h1>
+          <h1 className="text-4xl font-bold">냉탐정</h1>
         </div>
         <p className="text-2xl font-semibold text-primary mb-2">
           냉장고 열면, 답 나온다

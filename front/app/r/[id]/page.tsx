@@ -15,11 +15,11 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     const titles = data.recipes?.map((r: { title: string }) => r.title).join(", ") ?? "";
     const firstImage = resolveImageUrl(data.recipes?.[0]?.image_url);
 
-    const description = `오머먹 - 냉장고 재료로 만드는 15분 레시피: ${titles}`;
+    const description = `냉탐정 - 냉장고 재료로 만드는 15분 레시피: ${titles}`;
     const url = `https://recipe.eupori.dev/r/${params.id}`;
 
     return {
-      title: `${titles} | 오머먹`,
+      title: `${titles} | 냉탐정`,
       description,
       alternates: { canonical: url },
       openGraph: {
@@ -30,15 +30,15 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
       },
       twitter: {
         card: firstImage ? "summary_large_image" : "summary",
-        title: `${titles} | 오머먹`,
+        title: `${titles} | 냉탐정`,
         description,
         ...(firstImage ? { images: [firstImage] } : {}),
       },
     };
   } catch {
     return {
-      title: "추천 레시피 | 오머먹",
-      description: "오머먹 - AI가 추천한 냉장고 파먹기 레시피",
+      title: "추천 레시피 | 냉탐정",
+      description: "냉탐정 - AI가 추천한 냉장고 파먹기 레시피",
     };
   }
 }
@@ -61,7 +61,7 @@ export default async function ResultPage({ params }: { params: { id: string } })
     "@context": "https://schema.org",
     "@type": "Recipe",
     name: r.title,
-    description: r.summary || `${r.title} - 오머먹 AI 추천 레시피`,
+    description: r.summary || `${r.title} - 냉탐정 AI 추천 레시피`,
     ...(r.time_min ? { totalTime: `PT${r.time_min}M` } : {}),
     ...(r.servings ? { recipeYield: `${r.servings}인분` } : {}),
     ...(r.image_url ? { image: resolveImageUrl(r.image_url) } : {}),
@@ -71,7 +71,7 @@ export default async function ResultPage({ params }: { params: { id: string } })
       position: i + 1,
       text: step,
     })),
-    author: { "@type": "Organization", name: "오머먹" },
+    author: { "@type": "Organization", name: "냉탐정" },
   })) || [];
 
   return (
