@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState, useCallback, useRef } from "react";
+import { memo, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { ImageDown, Loader2 } from "lucide-react";
 import html2canvas from "html2canvas";
@@ -25,13 +25,28 @@ export const SaveCardButton = memo(function SaveCardButton({
   recipeNumber,
 }: SaveCardButtonProps) {
   const [saving, setSaving] = useState(false);
-  const cardRef = useRef<HTMLDivElement>(null);
 
   const handleSave = useCallback(async () => {
     if (saving) return;
     setSaving(true);
 
     try {
+      // 이미지를 base64로 변환 (CORS 우회)
+      let base64Image: string | null = null;
+      if (imageUrl) {
+        try {
+          const res = await fetch(imageUrl);
+          const blob = await res.blob();
+          base64Image = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+        } catch {
+          // 이미지 로드 실패 시 무시
+        }
+      }
+
       // 캡처용 카드를 임시로 DOM에 추가
       const container = document.createElement("div");
       container.style.position = "fixed";
@@ -56,8 +71,8 @@ export const SaveCardButton = memo(function SaveCardButton({
       card.innerHTML = `
         <div style="position:relative;">
           ${
-            imageUrl
-              ? `<img src="${imageUrl}" crossorigin="anonymous" style="width:540px;height:300px;object-fit:cover;display:block;" />`
+            base64Image
+              ? `<img src="${base64Image}" style="width:540px;height:300px;object-fit:cover;display:block;" />`
               : `<div style="width:540px;height:180px;background:linear-gradient(135deg,#f97316,#ea580c);display:flex;align-items:center;justify-content:center;">
                   <span style="font-size:64px;">🍳</span>
                 </div>`
@@ -104,25 +119,8 @@ export const SaveCardButton = memo(function SaveCardButton({
 
       container.appendChild(card);
 
-      // 이미지 로드 대기
-      const imgs = card.querySelectorAll("img");
-      if (imgs.length > 0) {
-        await Promise.all(
-          Array.from(imgs).map(
-            (img) =>
-              new Promise<void>((resolve) => {
-                if (img.complete) return resolve();
-                img.onload = () => resolve();
-                img.onerror = () => resolve();
-              })
-          )
-        );
-      }
-
       const canvas = await html2canvas(card, {
         scale: 2,
-        useCORS: true,
-        allowTaint: false,
         backgroundColor: "#ffffff",
       });
 
