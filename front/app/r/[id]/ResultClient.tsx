@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { Clock, Users, ChefHat, ShoppingCart, Lightbulb, ChevronDown, ChevronUp, Check, ExternalLink, CircleCheck, Apple, ArrowLeftRight, Archive, Youtube, Star } from "lucide-react";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { ShareButton } from "@/components/ShareButton";
+import { SaveCardButton } from "@/components/SaveCardButton";
 import AdUnit from "@/components/AdUnit";
 import { useAuth } from "@/lib/auth-context";
 import type { Recommendation, Recipe, ShoppingItem } from "@/types/recommendation";
@@ -369,6 +370,11 @@ export default function ResultClient({ id }: { id: string }) {
                         title={r.title}
                         text={`${r.title} - ${r.time_min}분 레시피`}
                         imageUrl={r.image_url || undefined}
+                      />
+                      <SaveCardButton
+                        recipe={r}
+                        imageUrl={recipeImages[idx]}
+                        recipeNumber={idx + 1}
                       />
                       <FavoriteButton
                         key={pendingProcessed?.recipeIndex === idx ? "processed" : "initial"}
