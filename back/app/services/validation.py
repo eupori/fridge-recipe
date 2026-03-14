@@ -133,6 +133,68 @@ def _check_style_diversity(recipes) -> bool:
     return True
 
 
+# ── 카테고리 감지 ──────────────────────────────────────────
+
+_CATEGORY_PATTERNS: dict[str, list[str]] = {
+    # 긴 패턴이 먼저 매칭되도록 각 카테고리 내에서 길이 역순 정렬
+    "밥": [
+        "오므라이스", "카레라이스", "볶음밥", "잡채밥", "주먹밥", "비빔밥",
+        "컵밥", "덮밥", "김밥", "초밥", "죽", "리조또", "카레",
+        "누룽지", "도시락", "밥",
+    ],
+    "국물": [
+        "샤브샤브", "수제비", "전골", "스튜", "찌개", "수프", "국", "탕",
+    ],
+    "면분식": [
+        "알리오올리오", "카르보나라", "스파게티", "야끼소바",
+        "잔치국수", "막국수", "비빔면", "볶음면", "칼국수",
+        "떡볶이", "라볶이", "짜파게티",
+        "파스타", "우동", "냉면", "국수", "소면", "쫄면",
+        "짜장", "짬뽕", "라면", "만두",
+    ],
+    "반찬단품": [
+        "샌드위치", "계란말이", "부침개", "꿔바로우", "탕수육",
+        "스크램블", "오믈렛", "핫도그", "돈까스", "김말이",
+        "토스트", "스테이크", "커틀렛", "그라탱",
+        "부침", "볶음", "구이", "무침", "조림", "튀김",
+        "나물", "잡채", "너겟", "강정", "피자", "치킨",
+        "꼬치", "어묵", "프라이", "전", "쌈",
+    ],
+}
+
+
+# 단독으로는 false positive 위험이 큰 짧은 패턴 → 접미사 매칭만
+_SUFFIX_ONLY = {"국", "밥", "전", "쌈", "죽", "탕"}
+
+
+def detect_category(title: str) -> str:
+    """레시피 제목에서 카테고리 감지. 매칭 안 되면 빈 문자열 반환"""
+    title_lower = title.strip().lower()
+    for cat, patterns in _CATEGORY_PATTERNS.items():
+        for p in patterns:
+            if p in _SUFFIX_ONLY:
+                # "국", "밥" 등 짧은 패턴은 제목 끝에 올 때만 매칭
+                if title_lower.endswith(p):
+                    return cat
+            elif p in title_lower:
+                return cat
+    return ""
+
+
+def _check_title_suffix_diversity(recipes) -> bool:
+    """제목 접미사 중복 감지 (볶음밥+덮밥+비빔밥 같은 패턴)
+
+    Returns:
+        True = 다양함, False = 같은 카테고리 2개 이상 감지
+    """
+    categories = [detect_category(r.title) for r in recipes]
+    # 빈 문자열(미감지) 제외하고 중복 체크
+    detected = [c for c in categories if c]
+    if len(detected) >= 2 and len(set(detected)) < len(detected):
+        return False
+    return True
+
+
 def validate_response(resp: RecommendationResponse, req: RecommendationCreate) -> None:
     # hard rules
     if len(resp.recipes) != 3:
@@ -201,6 +263,15 @@ def validate_response(resp: RecommendationResponse, req: RecommendationCreate) -
             titles = [r.title for r in resp.recipes]
             logger.warning(
                 f"[품질] 스타일 다양성 부족: {titles} → 캐시 스킵"
+            )
+            resp._skip_cache = True  # type: ignore[attr-defined]
+
+        # S4. 제목 카테고리 중복 (볶음밥+덮밥+비빔밥 같은 패턴)
+        if not _check_title_suffix_diversity(resp.recipes):
+            titles = [r.title for r in resp.recipes]
+            cats = [detect_category(r.title) or "?" for r in resp.recipes]
+            logger.warning(
+                f"[품질] 카테고리 중복: {titles} → {cats} → 캐시 스킵"
             )
             resp._skip_cache = True  # type: ignore[attr-defined]
     except Exception as e:

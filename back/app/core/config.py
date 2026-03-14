@@ -58,7 +58,7 @@ class Settings(BaseSettings):
 
     # Claude Code CLI (headless mode)
     claude_binary: str = "claude"
-    claude_subprocess_timeout: int = 120
+    claude_subprocess_timeout: int = 150
 
     # Concurrency & Cache
     max_concurrent_llm: int = 3  # 동시 LLM subprocess 최대 수 (워커별)

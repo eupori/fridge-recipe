@@ -28,7 +28,7 @@ from app.services.llm_adapter import (
     RecipeLLMAdapter,
 )
 from app.services.reference_service import gather_references
-from app.services.validation import validate_response
+from app.services.validation import detect_category, validate_response
 from app.services.youtube_adapter import YouTubeRecipeAdapter
 
 logger = logging.getLogger(__name__)
@@ -301,6 +301,12 @@ async def create_recommendation(
             )
 
         llm_elapsed = time.monotonic() - start_time
+        # 카테고리 다양성 로깅
+        recipe_cats = [
+            f"{r.title}({detect_category(r.title) or '미분류'})"
+            for r in recipes_raw
+        ]
+        logger.info(f"레시피 카테고리: {', '.join(recipe_cats)}")
         logger.info(f"레시피 생성 완료: {llm_elapsed:.1f}초 (provider={provider})")
 
     # 3. 이미지 처리 (세마포어 밖)

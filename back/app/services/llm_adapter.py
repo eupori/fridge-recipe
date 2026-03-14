@@ -76,6 +76,54 @@ def _call_claude_cli(system_prompt: str, user_prompt: str, model: str, timeout: 
     return output
 
 
+def _try_repair_truncated_json(json_str: str) -> str | None:
+    """잘린 JSON 배열 복구 시도. 마지막 완전한 객체까지 잘라서 배열 닫기"""
+    # 이미 유효한 JSON이면 그대로
+    try:
+        json.loads(json_str)
+        return json_str
+    except json.JSONDecodeError:
+        pass
+
+    # 마지막 완전한 "}" 위치를 찾아서 거기까지만 잘라내기
+    # 패턴: }, 뒤에 다음 객체가 시작됐지만 끝나지 않은 경우
+    last_complete = -1
+    depth = 0
+    in_string = False
+    escape = False
+
+    for i, ch in enumerate(json_str):
+        if escape:
+            escape = False
+            continue
+        if ch == '\\' and in_string:
+            escape = True
+            continue
+        if ch == '"' and not escape:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                last_complete = i
+
+    if last_complete > 0:
+        repaired = json_str[:last_complete + 1].rstrip().rstrip(',') + "\n]"
+        try:
+            data = json.loads(repaired)
+            if isinstance(data, list) and len(data) >= 1:
+                logger.warning(f"JSON 잘림 복구 성공: {len(data)}개 객체 복원")
+                return repaired
+        except json.JSONDecodeError:
+            pass
+
+    return None
+
+
 def parse_llm_response(content: str) -> list[dict]:
     """Claude 응답을 파싱하여 레시피 데이터 추출 (공통 유틸)"""
     try:
@@ -100,6 +148,15 @@ def parse_llm_response(content: str) -> list[dict]:
         return recipes_data
 
     except json.JSONDecodeError as e:
+        # JSON 잘림 복구 시도
+        repaired = _try_repair_truncated_json(json_str)
+        if repaired:
+            data = json.loads(repaired)
+            if len(data) == 3:
+                return data
+            # 3개 미만이면 복구는 됐지만 불완전 → 재시도 유도
+            logger.warning(f"JSON 복구됐으나 {len(data)}개만 복원 (3개 필요)")
+
         logger.error(f"JSON 파싱 실패: {str(e)}\n응답 내용: {content[:500]}")
         raise ValueError(f"JSON 파싱 실패: {str(e)}") from e
 
@@ -252,7 +309,11 @@ class RecipeLLMAdapter:
                 return recipes
 
             except subprocess.TimeoutExpired as e:
-                logger.warning(f"LLM CLI 타임아웃 (시도 {attempt + 1}/{max_retries}), 즉시 폴백: {e}")
+                logger.warning(f"LLM CLI 타임아웃 (시도 {attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    logger.info("타임아웃 재시도...")
+                    continue
+                logger.error("타임아웃 최종 실패, 폴백 레시피 반환")
                 return fallback_dummy_recipes(payload)
             except Exception as e:
                 logger.warning(f"LLM 생성 실패 (시도 {attempt + 1}/{max_retries}): {str(e)}")
@@ -284,8 +345,15 @@ class RecipeLLMAdapter:
    좋은 예: "간장 1큰술을 가장자리에 둘러 넣고 30초간 볶아 향을 낸다"
 8. 3개 레시피는 반드시 서로 다른 카테고리여야 합니다:
    - 밥(볶음밥/덮밥/비빔밥) / 국물(찌개/국/탕) / 반찬단품(볶음/전/무침/조림) / 면분식(볶음면/라면/파스타/떡볶이)
-   - 같은 카테고리에서 2개 이상 선택 금지!
-   - 예: 볶음밥 + 덮밥은 둘 다 "밥" 카테고리이므로 불가
+   - 같은 카테고리에서 2개 이상 선택 절대 금지!
+
+   ❌ 나쁜 예 (전부 밥류): 볶음밥 + 덮밥 + 비빔밥
+   ❌ 나쁜 예 (전부 토스트): 햄치즈토스트 + 계란토스트 + 치즈토스트
+   ❌ 나쁜 예 (전부 라면): 계란라면 + 치즈라면 + 대파라면
+   ❌ 나쁜 예 (전부 파스타): 알리오올리오 + 크림파스타 + 베이컨파스타
+
+   ✅ 좋은 예: 볶음밥(밥) + 된장찌개(국물) + 계란전(반찬)
+   ✅ 좋은 예: 라면변형(면분식) + 두부조림(반찬) + 주먹밥(밥)
 9. 반드시 한 끼 식사(또는 든든한 간식)로 먹을 수 있는 실제 요리여야 합니다
    - 양념, 소스, 오일, 드레싱, 조미료만 만드는 레시피는 절대 포함하지 마세요
 10. 자취생 현실을 반영하세요:
@@ -304,6 +372,36 @@ class RecipeLLMAdapter:
 15. 참고 레시피가 제공되면 해당 카테고리에 어떤 요리가 있는지 참고만 하세요
     - 참고 레시피를 따라하거나 비슷하게 만들 필요 없습니다
     - 사용자 재료로 자유롭게 새로운 레시피를 만드세요
+16. 실제로 존재하는 한국 가정요리만 추천하세요. 카테고리 다양성을 위해 억지 조합을 만들지 마세요!
+    - 검증되지 않은 창작 퓨전 요리 금지 (예: 카레김밥, 파스타국, 라면볶음밥)
+    - 기본 조합이 맞지 않는 요리 금지 (예: 브로콜리 간장국, 베이컨 된장찌개)
+    - 재료를 억지로 다른 카테고리에 끼워넣지 마세요:
+      ❌ "라면 계란국" (라면은 국 재료가 아님)
+      ❌ "라면사리 비빔밥" (라면사리를 밥에 올리는 건 비현실적)
+      ❌ "감자 크림라면" (실제로 아무도 이렇게 안 먹음)
+      ❌ "삼겹살 고추장라면" (삼겹살+라면은 되지만 고추장까지 합치면 억지)
+      ❌ "식빵 크루통 수프" (자취생이 크루통을 만들어 수프에 넣지 않음)
+    - 한국인이 실제로 해먹는 요리인지 자문하세요. "이 요리를 네이버에 검색하면 레시피가 나올까?"를 기준으로 판단하세요
+    - 재료가 부족해서 다른 카테고리 요리가 어려우면, 차라리 추가 재료를 더 넣어서라도 현실적인 요리를 만드세요
+    - 다양성보다 현실성이 더 중요합니다. 억지 다양성보다는 자연스러운 요리 3개가 낫습니다
+17. 사용자 재료가 3개 이하로 단순한 경우:
+    - 같은 요리의 변형을 만들지 마세요 (토스트 3종, 라면 3종 금지)
+    - 사용자 재료를 주재료로 하되, 자취생이 흔히 갖고 있는 기본 재료(계란, 양파, 대파, 간장, 고추장, 김치, 밥 등)를 자유롭게 추가하여 완전히 다른 요리 3가지를 만드세요
+    - 예: 감자 → 감자볶음(반찬) + 감자수제비(국물) + 감자전(반찬) 대신 감자볶음(반찬) + 된장찌개에 감자 넣기(국물) + 감자 계란볶음밥(밥)
+18. 조리 단계의 동사와 문장 구조를 다양하게 사용하세요:
+    - "~를 넣고" 연속 반복 금지 → 넣다/올리다/투입하다/부어넣다 등 교체
+    - "~를 볶고" 연속 반복 금지 → 볶다/굽다/부치다/지지다/튀기다 등 상황에 맞게
+    - 같은 문장 구조("A를 B하고 C한다") 3회 이상 연속 금지
+19. summary는 맛/식감을 담은 매력적인 한 줄로 작성하세요 (50자 이내):
+    - ❌ "간단하게 만드는 요리", "쉽게 만드는 한 끼", "빠르게 만드는 음식"
+    - ✅ "바삭한 겉면에 촉촉한 속, 자취생 필살기"
+    - ✅ "얼큰한 국물이 속을 풀어주는 해장 한 그릇"
+    - ✅ "참치캔과 김치로 끓이는 자취생 인생 찌개"
+20. tips는 실용적인 조리 노하우만 포함하세요:
+    - ❌ "맛있게 드세요", "영양가 있게 먹으세요", "건강하게 즐기세요"
+    - ✅ "김치가 시큼할수록 찌개 맛이 깊어요"
+    - ✅ "계란은 약불에서 천천히 익혀야 부드러워요"
+    - ✅ "남은 양념은 밥에 비벼 먹어도 맛있어요"
 
 출력 형식:
 JSON 배열로 3개의 레시피를 반환합니다. 각 레시피는 다음 필드를 포함:
@@ -367,6 +465,7 @@ JSON 배열로 3개의 레시피를 반환합니다. 각 레시피는 다음 필
 사용 가능 도구: {tools_str}
 제외 재료 (파생 재료 포함): {exclude_str}
 
+★★★ 필수 카테고리 배정 (반드시 아래 카테고리를 따르세요) ★★★
 {category_block}
 
 요구사항:
@@ -379,6 +478,7 @@ JSON 배열로 3개의 레시피를 반환합니다. 각 레시피는 다음 필
 7. 위 제외 재료는 어떤 형태로도 절대 사용하지 말 것
    예) 토마토 알러지 → 케첩, 토마토소스 등도 절대 사용 금지
    예) 우유 알러지 → 치즈, 버터, 크림 등도 절대 사용 금지
+8. 위 카테고리 배정을 반드시 준수하세요. 3개 레시피가 같은 유형이면 실패입니다.
 
 JSON 배열 형식으로만 응답하세요."""
 
